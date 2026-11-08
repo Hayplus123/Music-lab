@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Browser Music Lab - Resizable & Expanded Notes</title>
+    <title>Browser Music Lab - Tempo & BPM Control</title>
     <style>
         :root {
             --bg-dark: #121214;
@@ -141,7 +141,7 @@
 
         .timeline-toolbar {
             display: flex;
-            gap: 10px;
+            gap: 15px;
             align-items: center;
         }
 
@@ -157,6 +157,23 @@
 
         .control-btn:hover {
             border-color: var(--accent);
+        }
+
+        .tempo-control {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 0.85rem;
+            color: var(--text-muted);
+            background-color: var(--bg-card);
+            padding: 4px 10px;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+        }
+
+        .tempo-control input[type="range"] {
+            accent-color: var(--accent);
+            cursor: pointer;
         }
 
         .master-grid {
@@ -194,7 +211,7 @@
             background-color: var(--accent);
         }
 
-        /* Bottom Section: Instrument Drawer / Sub-Page (Resizable Height) */
+        /* Bottom Section: Instrument Drawer / Sub-Page */
         .instrument-workspace {
             height: 300px;
             min-height: 100px;
@@ -330,9 +347,13 @@
             <!-- Top: Master Timeline & Playback -->
             <div class="timeline-section">
                 <div class="timeline-header">
-                    <div class="section-title" style="margin: 0;">Master Timeline (All Layered Instruments)</div>
+                    <div class="section-title" style="margin: 0;">Master Timeline & Controls</div>
                     <div class="timeline-toolbar">
-                        <button class="control-btn" id="play-btn" onclick="togglePlayback()">▶ Play Full Composition</button>
+                        <div class="tempo-control">
+                            <span>Tempo: <strong id="bpm-display" style="color:var(--text-main);">120</strong> BPM</span>
+                            <input type="range" id="bpm-slider" min="60" max="180" value="120" oninput="updateTempo(this.value)">
+                        </div>
+                        <button class="control-btn" id="play-btn" onclick="togglePlayback()">▶ Play Composition</button>
                     </div>
                 </div>
                 <div class="master-grid" id="master-grid">
@@ -369,7 +390,6 @@
             const gain = audioCtx.createGain();
 
             let freq = 440;
-            // Basic frequency mapping for extended notes
             if (noteName.includes('C5')) freq = 523.25;
             else if (noteName.includes('B4')) freq = 493.88;
             else if (noteName.includes('A4')) freq = 440.00;
@@ -378,9 +398,9 @@
             else if (noteName.includes('E4')) freq = 329.63;
             else if (noteName.includes('D4')) freq = 293.66;
             else if (noteName.includes('C4')) freq = 261.63;
-            else if (noteName.includes('High') || noteName.includes('High Wood')) freq = 1400;
-            else if (noteName.includes('Mid') || noteName.includes('Mid Wood')) freq = 900;
-            else if (noteName.includes('Low') || noteName.includes('Low Wood')) freq = 400;
+            else if (noteName.includes('High')) freq = 1400;
+            else if (noteName.includes('Mid')) freq = 900;
+            else if (noteName.includes('Low')) freq = 400;
             else if (noteName.includes('Tap')) freq = 300;
 
             if (instrumentName.includes('Jingle')) {
@@ -435,11 +455,11 @@
         let activeInstrument = null;
         
         const TOTAL_STEPS = 16;
+        let currentBpm = 120;
         let isPlaying = false;
         let currentStep = 0;
         let playbackTimer = null;
 
-        // Expanded Instrument Note Ranges
         const instruments = [
             { name: 'Acoustic Grand Piano', category: 'Keys', notes: ['C5', 'B4', 'A4', 'G4', 'F4', 'E4', 'D4', 'C4'] },
             { name: 'Jingle Bell', category: 'Percussion', notes: ['High Jingles', 'Mid Jingles', 'Low Jingles', 'Single Tap'] },
@@ -620,6 +640,16 @@
             });
         }
 
+        function updateTempo(val) {
+            currentBpm = parseInt(val);
+            document.getElementById('bpm-display').innerText = currentBpm;
+            if (isPlaying) {
+                // Restart timer with new interval speed on the fly
+                clearInterval(playbackTimer);
+                startPlaybackTimer();
+            }
+        }
+
         function togglePlayback() {
             initAudio();
             if (isPlaying) {
@@ -633,6 +663,12 @@
             isPlaying = true;
             document.getElementById('play-btn').innerText = '⏹ Stop Composition';
             currentStep = 0;
+            startPlaybackTimer();
+        }
+
+        function startPlaybackTimer() {
+            // Formula: 15000 / BPM gives the millisecond interval for 16th notes
+            const intervalMs = 15000 / currentBpm;
 
             playbackTimer = setInterval(() => {
                 playCurrentStep();
@@ -641,13 +677,13 @@
                     const inst = instruments.find(i => i.name === activeInstrument);
                     if (inst) populateSequencerGrid(inst);
                 }
-            }, 250);
+            }, intervalMs);
         }
 
         function stopPlayback() {
             isPlaying = false;
             clearInterval(playbackTimer);
-            document.getElementById('play-btn').innerText = '▶ Play Full Composition';
+            document.getElementById('play-btn').innerText = '▶ Play Composition';
             currentStep = 0;
             if (activeInstrument) {
                 const inst = instruments.find(i => i.name === activeInstrument);
