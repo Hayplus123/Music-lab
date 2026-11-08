@@ -273,9 +273,41 @@
             text-align: right;
         }
 
+        .note-label.available-note {
+            color: #fff;
+            background-color: rgba(99, 102, 241, 0.28);
+            border-right: 3px solid var(--accent);
+            border-radius: 4px;
+        }
+
+        .master-row.available-note-row .step-box {
+            border-color: rgba(99, 102, 241, 0.45);
+        }
+
         .steps-container {
             display: flex;
             gap: 4px;
+        }
+
+        .available-notes-panel {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            min-height: 30px;
+            margin: 0 0 8px;
+            padding: 6px 9px;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            color: var(--text-muted);
+            font-size: 0.75rem;
+            white-space: normal;
+            overflow-y: auto;
+        }
+
+        .available-notes-panel strong {
+            color: var(--text-main);
+            flex-shrink: 0;
         }
 
         .step-box {
@@ -453,9 +485,13 @@
             <!-- Bottom: Instrument Bar / Drawer -->
             <div class="instrument-workspace" id="bottom-workspace">
                 <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 6px;">
-                    <span class="section-title" style="margin: 0;">Instrument Palette & Search (Double-click any instrument to highlight all active ones on the board)</span>
+                    <span class="section-title" style="margin: 0;">Instrument Palette & Search (Double-click an instrument to highlight its available notes)</span>
                 </div>
                 <input type="text" class="instrument-search" id="instrument-search" placeholder="Search instruments by name or category..." oninput="filterInstruments(this.value)">
+                <div class="available-notes-panel" id="available-notes-panel">
+                    <strong>Available notes:</strong>
+                    <span>Double-click an instrument to see its notes and highlight them on the board.</span>
+                </div>
                 <div class="instrument-grid" id="instrument-grid">
                     <!-- Populated via JS -->
                 </div>
@@ -502,7 +538,7 @@
         ];
 
         let activeInstrumentName = instruments[0].name;
-        let highlightActiveOnBoard = false; // Toggle for highlighting all instruments currently on the board
+        let highlightedInstrumentName = null; // Only set by double-clicking an instrument
 
         // Master Pitch Rows
         const masterPitchRows = [
@@ -523,7 +559,9 @@
         function playTone(instrumentName, noteName, durationSteps = 1, bpm = 120) {
             initAudio();
             const now = audioCtx.currentTime;
-            const stepDurationSec = (15 / bpm) * durationSteps;
+            // x1, x2 and x4 mean 1, 2 and 4 full beats.
+            // This changes note length only; it does not add timeline steps.
+            const stepDurationSec = (60 / bpm) * durationSteps;
             const gainNode = audioCtx.createGain();
             gainNode.connect(audioCtx.destination);
 
@@ -637,16 +675,6 @@
             document.body.style.cursor = 'default';
         });
 
-        // Click outside instrument palette to reset highlight mode ("click nothing")
-        window.addEventListener('click', (e) => {
-            if (!e.target.closest('.palette-item') && !e.target.closest('.instrument-search')) {
-                if (highlightActiveOnBoard) {
-                    highlightActiveOnBoard = false;
-                    renderInstrumentGrid(instruments);
-                }
-            }
-        });
-
         // State Management
         let projects = JSON.parse(localStorage.getItem('music_lab_projects')) || [
             { id: 1, name: 'My First Beat', notesData: {}, totalSteps: 32 }
@@ -733,23 +761,11 @@
         function renderInstrumentGrid(items) {
             const grid = document.getElementById('instrument-grid');
             grid.innerHTML = '';
-            const activeOnBoard = getActiveInstrumentsOnBoard();
 
             items.forEach(inst => {
                 const item = document.createElement('div');
-                
-                let itemClass = 'palette-item';
-                if (activeInstrumentName === inst.name) itemClass += ' active';
-
-                if (highlightActiveOnBoard) {
-                    if (activeOnBoard.has(inst.name)) {
-                        itemClass += ' focused';
-                    } else {
-                        itemClass += ' faded';
-                    }
-                }
-
-                item.className = itemClass;
+                // Selecting an instrument with one click does not visually highlight it.
+                item.className = 'palette-item';
 
                 item.innerHTML = `
                     <div class="color-dot" style="background-color: ${inst.color};"></div>
@@ -762,18 +778,27 @@
                 item.onclick = (e) => {
                     e.stopPropagation();
                     activeInstrumentName = inst.name;
-                    renderInstrumentGrid(instruments.filter(i => i.name.toLowerCase().includes(document.getElementById('instrument-search').value.toLowerCase()) || i.category.toLowerCase().includes(document.getElementById('instrument-search').value.toLowerCase())));
                 };
 
-                // Double click toggles highlighting all instruments currently on the board
+                // Double-click selects the instrument and highlights its playable note rows.
                 item.ondblclick = (e) => {
                     e.stopPropagation();
-                    highlightActiveOnBoard = !highlightActiveOnBoard;
-                    renderInstrumentGrid(instruments.filter(i => i.name.toLowerCase().includes(document.getElementById('instrument-search').value.toLowerCase()) || i.category.toLowerCase().includes(document.getElementById('instrument-search').value.toLowerCase())));
+                    activeInstrumentName = inst.name;
+                    highlightedInstrumentName = inst.name;
+                    showAvailableNotes(inst);
+                    renderMasterGrid();
                 };
 
                 grid.appendChild(item);
             });
+        }
+
+        function showAvailableNotes(inst) {
+            const panel = document.getElementById('available-notes-panel');
+            panel.innerHTML = `
+                <strong>${inst.name} notes:</strong>
+                <span>${inst.notes.join(' • ')}</span>
+            `;
         }
 
         function filterInstruments(query) {
@@ -837,8 +862,13 @@
                 const row = document.createElement('div');
                 row.className = 'master-row';
 
+                const highlightedInst = instruments.find(i => i.name === highlightedInstrumentName);
+                const noteIsAvailable = highlightedInst && highlightedInst.notes.includes(note);
+                if (noteIsAvailable) row.classList.add('available-note-row');
+
                 const label = document.createElement('div');
                 label.className = 'note-label';
+                if (noteIsAvailable) label.classList.add('available-note');
                 label.innerText = note;
                 row.appendChild(label);
 
@@ -856,7 +886,7 @@
                         stepBox.style.backgroundColor = instObj.color;
                         stepBox.style.borderColor = instObj.color;
                         stepBox.innerHTML = `<span>${note}</span><span style="font-size:0.45rem; opacity:0.8;">${cellData.duration}x</span>`;
-                        stepBox.title = `Instrument:\n${instObj.name} (${instObj.category})`;
+                        stepBox.title = `Instrument: ${instObj.name} (${instObj.category})\\nDuration: ${cellData.duration} beat(s)`;
                     }
 
                     if (isPlaying && currentStep === s) {
