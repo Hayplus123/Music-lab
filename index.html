@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Open Music Lab - Validated Notes & Feedback</title>
+    <title>Open Music Lab - Fixed Note Validation & Clean Code</title>
     <style>
         :root {
             --bg-dark: #121214;
@@ -353,7 +353,7 @@
 
         .instrument-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
             gap: 8px;
             overflow-y: auto;
             flex: 1;
@@ -370,7 +370,7 @@
             cursor: pointer;
             font-size: 0.85rem;
             transition: all 0.2s;
-            height: 50px;
+            min-height: 50px;
         }
 
         .palette-item:hover {
@@ -380,6 +380,16 @@
         .palette-item.active {
             border-color: var(--accent);
             background-color: rgba(99, 102, 241, 0.15);
+        }
+
+        .palette-item.faded {
+            opacity: 0.3;
+        }
+
+        .palette-item.focused {
+            border-color: var(--accent);
+            background-color: rgba(99, 102, 241, 0.25);
+            box-shadow: 0 0 10px rgba(99, 102, 241, 0.3);
         }
 
         .color-dot {
@@ -415,7 +425,7 @@
         </sidebar>
 
         <!-- Center Workspace -->
-        <div class="center-workspace">
+        <div class="center-workspace" id="main-workspace-area">
             <!-- Top: Master Mix Composition Board -->
             <div class="timeline-header">
                 <div class="section-title" style="margin: 0;">Master Mix Composition Board</div>
@@ -443,7 +453,7 @@
             <!-- Bottom: Instrument Bar / Drawer -->
             <div class="instrument-workspace" id="bottom-workspace">
                 <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 6px;">
-                    <span class="section-title" style="margin: 0;">Instrument Palette & Search</span>
+                    <span class="section-title" style="margin: 0;">Instrument Palette & Search (Double-click instrument to inspect notes)</span>
                 </div>
                 <input type="text" class="instrument-search" id="instrument-search" placeholder="Search instruments by name or category..." oninput="filterInstruments(this.value)">
                 <div class="instrument-grid" id="instrument-grid">
@@ -465,7 +475,7 @@
             }
         }
 
-        // Expanded Instrument Library with explicit valid notes arrays[cite: 3, 4, 5]
+        // Instrument Definitions with Valid Pitch Ranges
         const instruments = [
             { name: 'Acoustic Grand Piano', category: 'Keys', color: '#3b82f6', notes: ['C5', 'B4', 'A4', 'G4', 'F4', 'E4', 'D4', 'C4', 'B3', 'A3', 'G3', 'F3', 'E3', 'D3', 'C3'] },
             { name: 'Electric Piano', category: 'Keys', color: '#2563eb', notes: ['C5', 'B4', 'A4', 'G4', 'F4', 'E4', 'D4', 'C4', 'B3', 'A3', 'G3', 'F3', 'E3'] },
@@ -492,6 +502,7 @@
         ];
 
         let activeInstrumentName = instruments[0].name;
+        let focusedInstrumentName = null;
 
         // Master Pitch Rows
         const masterPitchRows = [
@@ -626,6 +637,16 @@
             document.body.style.cursor = 'default';
         });
 
+        // Deselect instrument focus when clicking outside cards
+        window.addEventListener('click', (e) => {
+            if (!e.target.closest('.palette-item') && !e.target.closest('.instrument-search')) {
+                if (focusedInstrumentName) {
+                    focusedInstrumentName = null;
+                    renderInstrumentGrid(instruments);
+                }
+            }
+        });
+
         // State Management
         let projects = JSON.parse(localStorage.getItem('music_lab_projects')) || [
             { id: 1, name: 'My First Beat', notesData: {}, totalSteps: 32 }
@@ -700,18 +721,40 @@
             grid.innerHTML = '';
             items.forEach(inst => {
                 const item = document.createElement('div');
-                item.className = `palette-item ${activeInstrumentName === inst.name ? 'active' : ''}`;
+                
+                let itemClass = 'palette-item';
+                if (activeInstrumentName === inst.name) itemClass += ' active';
+                if (focusedInstrumentName) {
+                    if (focusedInstrumentName === inst.name) itemClass += ' focused';
+                    else itemClass += ' faded';
+                }
+                item.className = itemClass;
+
+                let notesDisplay = `${inst.notes.length} note(s)`;
+                if (focusedInstrumentName === inst.name) {
+                    notesDisplay = `Notes: [${inst.notes.join(', ')}]`;
+                }
+
                 item.innerHTML = `
                     <div class="color-dot" style="background-color: ${inst.color};"></div>
                     <div style="flex:1;">
                         <div style="font-weight:600; font-size:0.85rem;">${inst.name}</div>
-                        <div style="font-size:0.7rem; color:var(--text-muted);">${inst.category} • ${inst.notes.length} note(s)</div>
+                        <div style="font-size:0.75rem; color:var(--text-muted);">${inst.category} • ${notesDisplay}</div>
                     </div>
                 `;
-                item.onclick = () => {
+
+                item.onclick = (e) => {
+                    e.stopPropagation();
                     activeInstrumentName = inst.name;
                     renderInstrumentGrid(instruments.filter(i => i.name.toLowerCase().includes(document.getElementById('instrument-search').value.toLowerCase()) || i.category.toLowerCase().includes(document.getElementById('instrument-search').value.toLowerCase())));
                 };
+
+                item.ondblclick = (e) => {
+                    e.stopPropagation();
+                    focusedInstrumentName = (focusedInstrumentName === inst.name) ? null : inst.name;
+                    renderInstrumentGrid(instruments.filter(i => i.name.toLowerCase().includes(document.getElementById('instrument-search').value.toLowerCase()) || i.category.toLowerCase().includes(document.getElementById('instrument-search').value.toLowerCase())));
+                };
+
                 grid.appendChild(item);
             });
         }
@@ -803,11 +846,12 @@
                         stepBox.classList.add('playing-head');
                     }
 
-                    // Single click: Strict Validation and Notification showing available notes
-                    stepBox.onclick = () => {
+                    // Single Click Validation (permits single-note instruments on their correct note)
+                    stepBox.onclick = (e) => {
+                        e.stopPropagation();
                         const instObj = instruments.find(i => i.name === activeInstrumentName);
 
-                        if (!instObj || instObj.notes.length <= 1) {
+                        if (!instObj || !instObj.notes || instObj.notes.length === 0) {
                             showNotification(`No notes found for ${activeInstrumentName}.`);
                             return;
                         }
@@ -839,7 +883,7 @@
                         }
                     };
 
-                    // Double click: Instant delete
+                    // Double Click: Instant delete
                     stepBox.ondblclick = (e) => {
                         e.stopPropagation();
                         if (activeProj.notesData[s] && activeProj.notesData[s][note]) {
