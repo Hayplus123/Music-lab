@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Browser Music Lab - Sequencer & Instruments</title>
+    <title>Browser Music Lab - Resizable & Expanded Notes</title>
     <style>
         :root {
             --bg-dark: #121214;
@@ -124,12 +124,12 @@
 
         /* Top Section: Master Timeline & Playback */
         .timeline-section {
-            height: 200px;
+            flex: 1;
             background-color: var(--bg-dark);
             display: flex;
             flex-direction: column;
             padding: 15px;
-            border-bottom: 1px solid var(--border);
+            min-height: 120px;
         }
 
         .timeline-header {
@@ -178,11 +178,27 @@
             background-color: var(--bg-card);
             padding: 6px 10px;
             border-radius: 4px;
+            justify-content: space-between;
         }
 
-        /* Bottom Section: Instrument Drawer / Sub-Page */
+        /* Resize Handle Bar */
+        .resize-handle {
+            height: 8px;
+            background-color: var(--border);
+            cursor: ns-resize;
+            width: 100%;
+            transition: background 0.2s;
+        }
+
+        .resize-handle:hover {
+            background-color: var(--accent);
+        }
+
+        /* Bottom Section: Instrument Drawer / Sub-Page (Resizable Height) */
         .instrument-workspace {
-            flex: 1;
+            height: 300px;
+            min-height: 100px;
+            max-height: 600px;
             background-color: var(--bg-panel);
             display: flex;
             flex-direction: column;
@@ -258,7 +274,7 @@
         }
 
         .note-label {
-            width: 70px;
+            width: 90px;
             font-size: 0.8rem;
             color: var(--text-muted);
             font-weight: 600;
@@ -324,6 +340,9 @@
                 </div>
             </div>
 
+            <!-- Resizable Divider Handle -->
+            <div class="resize-handle" id="resize-handle" title="Drag to resize panels"></div>
+
             <!-- Bottom: Instrument Hub / Sub-Page Workspace -->
             <div class="instrument-workspace" id="bottom-workspace">
                 <!-- Dynamically swapped between Instrument List and Sequencer Sub-Page -->
@@ -350,16 +369,23 @@
             const gain = audioCtx.createGain();
 
             let freq = 440;
-            if (noteName === 'C4') freq = 261.63;
-            if (noteName === 'E4') freq = 329.63;
-            if (noteName === 'G4') freq = 392.00;
-            if (noteName === 'C5') freq = 523.25;
-            if (noteName === 'High' || noteName === 'Tap') freq = 1200;
-            if (noteName === 'Low') freq = 180;
+            // Basic frequency mapping for extended notes
+            if (noteName.includes('C5')) freq = 523.25;
+            else if (noteName.includes('B4')) freq = 493.88;
+            else if (noteName.includes('A4')) freq = 440.00;
+            else if (noteName.includes('G4')) freq = 392.00;
+            else if (noteName.includes('F4')) freq = 349.23;
+            else if (noteName.includes('E4')) freq = 329.63;
+            else if (noteName.includes('D4')) freq = 293.66;
+            else if (noteName.includes('C4')) freq = 261.63;
+            else if (noteName.includes('High') || noteName.includes('High Wood')) freq = 1400;
+            else if (noteName.includes('Mid') || noteName.includes('Mid Wood')) freq = 900;
+            else if (noteName.includes('Low') || noteName.includes('Low Wood')) freq = 400;
+            else if (noteName.includes('Tap')) freq = 300;
 
             if (instrumentName.includes('Jingle')) {
                 osc.type = 'triangle';
-            } else if (instrumentName.includes('Stick')) {
+            } else if (instrumentName.includes('Stick') || instrumentName.includes('Woodblock')) {
                 osc.type = 'square';
             } else {
                 osc.type = 'sine';
@@ -376,25 +402,51 @@
             osc.stop(audioCtx.currentTime + 0.3);
         }
 
+        // Panel Resizing Logic
+        const resizeHandle = document.getElementById('resize-handle');
+        const bottomWorkspace = document.getElementById('bottom-workspace');
+        let isResizing = false;
+
+        resizeHandle.addEventListener('mousedown', (e) => {
+            isResizing = true;
+            document.body.style.cursor = 'ns-resize';
+            e.preventDefault();
+        });
+
+        window.addEventListener('mousemove', (e) => {
+            if (!isResizing) return;
+            const containerRect = document.querySelector('.center-workspace').getBoundingClientRect();
+            const newHeight = containerRect.bottom - e.clientY;
+            if (newHeight >= 100 && newHeight <= containerRect.height - 100) {
+                bottomWorkspace.style.height = `${newHeight}px`;
+            }
+        });
+
+        window.addEventListener('mouseup', () => {
+            isResizing = false;
+            document.body.style.cursor = 'default';
+        });
+
         // State Management
         let projects = JSON.parse(localStorage.getItem('music_lab_projects')) || [
-            { id: 1, name: 'My First Beat', patterns: {} } // patterns[instrumentName] = { noteName: [true, false, ...] }
+            { id: 1, name: 'My First Beat', patterns: {} }
         ];
         let currentProjectId = projects[0].id;
-        let activeInstrument = null; // null = Instrument Hub, string = Instrument Sequencer Page
+        let activeInstrument = null;
         
         const TOTAL_STEPS = 16;
         let isPlaying = false;
         let currentStep = 0;
         let playbackTimer = null;
 
+        // Expanded Instrument Note Ranges
         const instruments = [
-            { name: 'Acoustic Grand Piano', category: 'Keys', notes: ['C5', 'G4', 'E4', 'C4'] },
-            { name: 'Jingle Bell', category: 'Percussion', notes: ['High', 'Low'] },
-            { name: 'Stick Tap / Woodblock', category: 'Percussion', notes: ['Tap'] },
-            { name: 'Acoustic Guitar', category: 'Strings', notes: ['G4', 'E4', 'C4'] },
-            { name: 'Flute', category: 'Woodwind', notes: ['C5', 'G4', 'C4'] },
-            { name: 'Synth Lead', category: 'Electronic', notes: ['C5', 'G4', 'E4', 'C4'] }
+            { name: 'Acoustic Grand Piano', category: 'Keys', notes: ['C5', 'B4', 'A4', 'G4', 'F4', 'E4', 'D4', 'C4'] },
+            { name: 'Jingle Bell', category: 'Percussion', notes: ['High Jingles', 'Mid Jingles', 'Low Jingles', 'Single Tap'] },
+            { name: 'Stick Tap / Woodblock', category: 'Percussion', notes: ['High Wood', 'Mid Wood', 'Low Wood', 'Rim Tap'] },
+            { name: 'Acoustic Guitar', category: 'Strings', notes: ['G4', 'F4', 'E4', 'D4', 'C4', 'B3', 'A3'] },
+            { name: 'Flute', category: 'Woodwind', notes: ['C5', 'B4', 'A4', 'G4', 'F4', 'E4', 'D4', 'C4'] },
+            { name: 'Synth Lead', category: 'Electronic', notes: ['C5', 'B4', 'A4', 'G4', 'F4', 'E4', 'D4', 'C4'] }
         ];
 
         function init() {
@@ -444,22 +496,20 @@
             const ws = document.getElementById('bottom-workspace');
             
             if (!activeInstrument) {
-                // View 1: Instrument Hub List
                 ws.innerHTML = `
                     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 8px;">
-                        <span class="section-title" style="margin: 0;">Instrument Hub (Click an instrument to open its page)</span>
+                        <span class="section-title" style="margin: 0;">Instrument Hub (Click an instrument to open its note grid)</span>
                     </div>
                     <input type="text" class="instrument-search" placeholder="Search instruments..." oninput="filterInstruments(this.value)">
                     <div class="instrument-grid" id="instrument-grid"></div>
                 `;
                 populateInstrumentGrid(instruments);
             } else {
-                // View 2: Instrument Sequencer Sub-Page
                 const inst = instruments.find(i => i.name === activeInstrument);
                 ws.innerHTML = `
                     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 10px;">
                         <button class="control-btn" onclick="activeInstrument = null; renderBottomWorkspace();">← Back to Instrument Hub</button>
-                        <strong style="font-size: 0.95rem; color: var(--accent);">${inst.name} Sequencer</strong>
+                        <strong style="font-size: 0.95rem; color: var(--accent);">${inst.name} Notes</strong>
                         <span style="font-size: 0.75rem; color: var(--text-muted);">${inst.category}</span>
                     </div>
                     <div class="sequencer-view">
@@ -479,7 +529,7 @@
                 card.className = 'instrument-card';
                 card.innerHTML = `
                     <strong style="font-size:0.9rem;">${inst.name}</strong>
-                    <span style="font-size:0.75rem; color:var(--text-muted);">${inst.category} • Click to open notes</span>
+                    <span style="font-size:0.75rem; color:var(--text-muted);">${inst.category} • ${inst.notes.length} pitches</span>
                 `;
                 card.onclick = () => {
                     activeInstrument = inst.name;
@@ -565,7 +615,7 @@
             activeInstruments.forEach(instName => {
                 const row = document.createElement('div');
                 row.className = 'master-track-row';
-                row.innerHTML = `<strong>${instName}</strong> <span style="margin-left: 10px; color: var(--accent);">Active melody pattern saved</span>`;
+                row.innerHTML = `<strong>${instName}</strong> <span style="color: var(--active-note);">Active pattern assigned</span>`;
                 grid.appendChild(row);
             });
         }
@@ -591,7 +641,7 @@
                     const inst = instruments.find(i => i.name === activeInstrument);
                     if (inst) populateSequencerGrid(inst);
                 }
-            }, 250); // 16th note speed
+            }, 250);
         }
 
         function stopPlayback() {
