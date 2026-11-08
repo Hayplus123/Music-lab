@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Browser Music Lab - Renaming & Upgraded Sound</title>
+    <title>Browser Music Lab - Fixed Note Grid</title>
     <style>
         :root {
             --bg-dark: #121214;
@@ -304,6 +304,7 @@
             flex-direction: column;
             gap: 10px;
             overflow: hidden;
+            min-height: 0;
         }
 
         .sequencer-grid-container {
@@ -313,6 +314,7 @@
             border-radius: 6px;
             overflow: auto;
             padding: 10px;
+            min-height: 150px;
         }
 
         .sequencer-row {
@@ -470,7 +472,6 @@
             gainNode.connect(audioCtx.destination);
 
             if (instrumentName.includes('Jingle')) {
-                // Metallic bell synthesis: multiple inharmonic frequencies + high pass filter
                 [1200, 1850, 2400, 3100].forEach(f => {
                     const osc = audioCtx.createOscillator();
                     const bellGain = audioCtx.createGain();
@@ -487,7 +488,6 @@
             }
 
             if (instrumentName.includes('Stick') || instrumentName.includes('Woodblock')) {
-                // Woodblock synthesis: short noise burst + resonant modal tone
                 const bufferSize = audioCtx.sampleRate * 0.05;
                 const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
                 const data = buffer.getChannelData(0);
@@ -513,7 +513,6 @@
                 return;
             }
 
-            // Standard melodic instruments (Piano, Guitar, Flute, Synth)
             const osc = audioCtx.createOscillator();
             if (instrumentName.includes('Piano')) osc.type = 'triangle';
             else if (instrumentName.includes('Guitar')) osc.type = 'sawtooth';
@@ -584,13 +583,20 @@
         }
 
         function getActiveProject() {
-            return projects.find(p => p.id === currentProjectId);
+            let proj = projects.find(p => p.id === currentProjectId);
+            if (!proj) {
+                proj = projects[0];
+                currentProjectId = proj.id;
+            }
+            if (!proj.patterns) proj.patterns = {};
+            if (!proj.totalSteps) proj.totalSteps = 32;
+            return proj;
         }
 
         function syncLengthSelect() {
             const activeProj = getActiveProject();
             if (activeProj) {
-                document.getElementById('length-select').value = activeProj.totalSteps || 32;
+                document.getElementById('length-select').value = activeProj.totalSteps;
             }
         }
 
@@ -727,12 +733,13 @@
 
             if (!activeProj.patterns[inst.name]) {
                 activeProj.patterns[inst.name] = {};
-                inst.notes.forEach(note => {
-                    activeProj.patterns[inst.name][note] = new Array(totalSteps).fill(0);
-                });
             }
 
             inst.notes.forEach(note => {
+                if (!activeProj.patterns[inst.name][note]) {
+                    activeProj.patterns[inst.name][note] = new Array(totalSteps).fill(0);
+                }
+
                 const row = document.createElement('div');
                 row.className = 'sequencer-row';
 
@@ -744,14 +751,10 @@
                 const stepsDiv = document.createElement('div');
                 stepsDiv.className = 'steps-container';
 
-                if (!activeProj.patterns[inst.name][note]) {
-                    activeProj.patterns[inst.name][note] = new Array(totalSteps).fill(0);
-                }
-
                 const patternArr = activeProj.patterns[inst.name][note];
 
                 for (let s = 0; s < totalSteps; s++) {
-                    const duration = patternArr[s];
+                    const duration = patternArr[s] || 0;
                     const stepBox = document.createElement('div');
                     
                     if (duration > 0) {
@@ -798,7 +801,7 @@
 
             const activeInstruments = Object.keys(activeProj.patterns).filter(instName => {
                 const notesObj = activeProj.patterns[instName];
-                return Object.values(notesObj).some(arr => arr.some(val => val > 0));
+                return notesObj && Object.values(notesObj).some(arr => arr.some(val => val > 0));
             });
 
             if (activeInstruments.length === 0) {
@@ -871,6 +874,7 @@
 
             Object.keys(activeProj.patterns).forEach(instName => {
                 const notesObj = activeProj.patterns[instName];
+                if (!notesObj) return;
                 Object.keys(notesObj).forEach(noteName => {
                     const duration = notesObj[noteName][currentStep];
                     if (duration > 0) {
