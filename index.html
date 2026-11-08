@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Browser Music Lab - Timeline & Instruments</title>
+    <title>Browser Music Lab - Sequencer & Instruments</title>
     <style>
         :root {
             --bg-dark: #121214;
@@ -14,6 +14,7 @@
             --text-main: #f3f4f6;
             --text-muted: #9ca3af;
             --border: #2e2e38;
+            --active-note: #10b981;
         }
 
         * {
@@ -121,15 +122,14 @@
             overflow: hidden;
         }
 
-        /* Top Section: Big Timeline */
+        /* Top Section: Master Timeline & Playback */
         .timeline-section {
-            flex: 1;
+            height: 200px;
             background-color: var(--bg-dark);
             display: flex;
             flex-direction: column;
             padding: 15px;
             border-bottom: 1px solid var(--border);
-            min-height: 250px;
         }
 
         .timeline-header {
@@ -159,68 +159,35 @@
             border-color: var(--accent);
         }
 
-        .timeline-grid {
+        .master-grid {
             flex: 1;
             background-color: var(--bg-panel);
             border: 1px solid var(--border);
             border-radius: 8px;
-            position: relative;
-            overflow: auto;
-            display: flex;
-            flex-direction: column;
-        }
-
-        .timeline-track-row {
-            height: 50px;
-            border-bottom: 1px solid var(--border);
-            display: flex;
-            align-items: center;
-            padding: 0 10px;
-            position: relative;
-        }
-
-        .timeline-track-label {
-            width: 120px;
-            font-size: 0.8rem;
-            color: var(--text-muted);
-            font-weight: 600;
-            border-right: 1px solid var(--border);
-            padding-right: 10px;
-        }
-
-        .timeline-track-content {
-            flex: 1;
-            height: 100%;
-            position: relative;
-        }
-
-        /* Bottom Section: Collapsible Instrument Drawer */
-        .instrument-drawer {
-            background-color: var(--bg-panel);
-            border-top: 1px solid var(--border);
-            display: flex;
-            flex-direction: column;
-            transition: height 0.3s ease;
-            height: 220px;
-        }
-
-        .drawer-header {
-            padding: 10px 15px;
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            border-bottom: 1px solid var(--border);
-            cursor: pointer;
-            background-color: rgba(255,255,255,0.02);
-        }
-
-        .drawer-content {
-            padding: 15px;
-            flex: 1;
+            padding: 10px;
             overflow-y: auto;
             display: flex;
             flex-direction: column;
-            gap: 10px;
+            gap: 8px;
+        }
+
+        .master-track-row {
+            display: flex;
+            align-items: center;
+            font-size: 0.8rem;
+            background-color: var(--bg-card);
+            padding: 6px 10px;
+            border-radius: 4px;
+        }
+
+        /* Bottom Section: Instrument Drawer / Sub-Page */
+        .instrument-workspace {
+            flex: 1;
+            background-color: var(--bg-panel);
+            display: flex;
+            flex-direction: column;
+            padding: 15px;
+            overflow: hidden;
         }
 
         .instrument-search {
@@ -231,6 +198,7 @@
             border-radius: 6px;
             color: white;
             font-size: 0.9rem;
+            margin-bottom: 10px;
         }
 
         .instrument-search:focus {
@@ -242,18 +210,22 @@
             display: grid;
             grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
             gap: 10px;
+            overflow-y: auto;
+            flex: 1;
         }
 
         .instrument-card {
             background-color: var(--bg-card);
             border: 1px solid var(--border);
             border-radius: 6px;
-            padding: 10px;
-            cursor: grab;
+            padding: 12px;
+            cursor: pointer;
             display: flex;
             flex-direction: column;
             gap: 6px;
             transition: all 0.2s;
+            height: 90px;
+            justify-content: center;
         }
 
         .instrument-card:hover {
@@ -261,25 +233,64 @@
             transform: translateY(-1px);
         }
 
-        .note-chips {
+        /* Sequencer Sub-Page View */
+        .sequencer-view {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            overflow: hidden;
+        }
+
+        .sequencer-grid-container {
+            flex: 1;
+            background-color: var(--bg-dark);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            overflow: auto;
+            padding: 10px;
+        }
+
+        .sequencer-row {
+            display: flex;
+            align-items: center;
+            margin-bottom: 6px;
+        }
+
+        .note-label {
+            width: 70px;
+            font-size: 0.8rem;
+            color: var(--text-muted);
+            font-weight: 600;
+        }
+
+        .steps-container {
             display: flex;
             gap: 4px;
-            flex-wrap: wrap;
+            flex: 1;
         }
 
-        .note-chip {
-            background-color: var(--bg-panel);
+        .step-box {
+            width: 32px;
+            height: 32px;
+            background-color: var(--bg-card);
             border: 1px solid var(--border);
-            padding: 3px 6px;
             border-radius: 4px;
-            font-size: 0.75rem;
             cursor: pointer;
-            color: var(--text-main);
+            transition: background 0.1s;
         }
 
-        .note-chip:hover {
-            background-color: var(--accent);
+        .step-box:hover {
             border-color: var(--accent);
+        }
+
+        .step-box.active {
+            background-color: var(--active-note);
+            border-color: var(--active-note);
+        }
+
+        .step-box.playing-head {
+            border-color: white !important;
         }
     </style>
 </head>
@@ -300,103 +311,96 @@
 
         <!-- Center Workspace -->
         <div class="center-workspace">
-            <!-- Top: Big Timeline -->
+            <!-- Top: Master Timeline & Playback -->
             <div class="timeline-section">
                 <div class="timeline-header">
-                    <div class="section-title" style="margin: 0;">Composition Timeline</div>
+                    <div class="section-title" style="margin: 0;">Master Timeline (All Layered Instruments)</div>
                     <div class="timeline-toolbar">
-                        <button class="control-btn" onclick="togglePlay()">▶ Play Preview</button>
-                        <span id="time-display" style="font-size: 0.85rem; color: var(--text-muted);">00:00</span>
+                        <button class="control-btn" id="play-btn" onclick="togglePlayback()">▶ Play Full Composition</button>
                     </div>
                 </div>
-                <div class="timeline-grid" id="timeline-grid" ondragover="allowDrop(event)" ondrop="dropOnTimeline(event)">
-                    <!-- Tracks dynamically generated here -->
+                <div class="master-grid" id="master-grid">
+                    <div style="color: var(--text-muted); font-size: 0.85rem; text-align: center; padding: 20px;">No notes added yet. Select an instrument below to start placing notes!</div>
                 </div>
             </div>
 
-            <!-- Bottom: Collapsible Instrument Drawer -->
-            <div class="instrument-drawer" id="instrument-drawer">
-                <div class="drawer-header" onclick="toggleDrawer()">
-                    <span class="section-title" style="margin: 0;">Instrument Drawer (Click to Collapse/Expand)</span>
-                    <span id="drawer-toggle-icon" style="font-size: 0.8rem; color: var(--text-muted);">▼</span>
-                </div>
-                <div class="drawer-content" id="drawer-content">
-                    <input type="text" class="instrument-search" placeholder="Search instruments (e.g., Piano, Jingle Bell, Stick Tap)..." oninput="filterInstruments(this.value)">
-                    <div class="instrument-grid" id="instrument-grid"></div>
-                </div>
+            <!-- Bottom: Instrument Hub / Sub-Page Workspace -->
+            <div class="instrument-workspace" id="bottom-workspace">
+                <!-- Dynamically swapped between Instrument List and Sequencer Sub-Page -->
             </div>
         </div>
     </div>
 
     <script>
-        // Web Audio API Context Setup for sound generation & previews
+        // Web Audio API Context Setup
         let audioCtx = null;
 
         function initAudio() {
             if (!audioCtx) {
                 audioCtx = new (window.AudioContext || window.webkitAudioContext)();
             }
-        }
-
-        function playNoteSound(instrumentName, noteName) {
-            initAudio();
             if (audioCtx.state === 'suspended') {
                 audioCtx.resume();
             }
+        }
 
+        function playTone(instrumentName, noteName) {
+            initAudio();
             const osc = audioCtx.createOscillator();
             const gain = audioCtx.createGain();
 
-            // Map notes to frequencies or create percussion bursts
             let freq = 440;
             if (noteName === 'C4') freq = 261.63;
             if (noteName === 'E4') freq = 329.63;
             if (noteName === 'G4') freq = 392.00;
             if (noteName === 'C5') freq = 523.25;
+            if (noteName === 'High' || noteName === 'Tap') freq = 1200;
+            if (noteName === 'Low') freq = 180;
 
             if (instrumentName.includes('Jingle')) {
                 osc.type = 'triangle';
-                freq = 1200; // High metallic jingle
             } else if (instrumentName.includes('Stick')) {
                 osc.type = 'square';
-                freq = 180; // Short wood click simulation
             } else {
                 osc.type = 'sine';
             }
 
             osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
-
-            // Envelope (fade out quickly so it sounds clean)
-            gain.gain.setValueAtTime(0.3, audioCtx.currentTime);
-            gain.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + 0.5);
+            gain.gain.setValueAtTime(0.2, audioCtx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + 0.3);
 
             osc.connect(gain);
             gain.connect(audioCtx.destination);
 
             osc.start();
-            osc.stop(audioCtx.currentTime + 0.5);
+            osc.stop(audioCtx.currentTime + 0.3);
         }
 
         // State Management
         let projects = JSON.parse(localStorage.getItem('music_lab_projects')) || [
-            { id: 1, name: 'My First Beat', tracks: [] }
+            { id: 1, name: 'My First Beat', patterns: {} } // patterns[instrumentName] = { noteName: [true, false, ...] }
         ];
         let currentProjectId = projects[0].id;
-        let drawerOpen = true;
+        let activeInstrument = null; // null = Instrument Hub, string = Instrument Sequencer Page
+        
+        const TOTAL_STEPS = 16;
+        let isPlaying = false;
+        let currentStep = 0;
+        let playbackTimer = null;
 
         const instruments = [
-            { name: 'Acoustic Grand Piano', category: 'Keys', notes: ['C4', 'E4', 'G4', 'C5'] },
+            { name: 'Acoustic Grand Piano', category: 'Keys', notes: ['C5', 'G4', 'E4', 'C4'] },
             { name: 'Jingle Bell', category: 'Percussion', notes: ['High', 'Low'] },
             { name: 'Stick Tap / Woodblock', category: 'Percussion', notes: ['Tap'] },
-            { name: 'Acoustic Guitar', category: 'Strings', notes: ['C4', 'E4', 'G4'] },
-            { name: 'Flute', category: 'Woodwind', notes: ['C4', 'G4', 'C5'] },
-            { name: 'Synth Lead', category: 'Electronic', notes: ['C4', 'E4', 'G4', 'C5'] }
+            { name: 'Acoustic Guitar', category: 'Strings', notes: ['G4', 'E4', 'C4'] },
+            { name: 'Flute', category: 'Woodwind', notes: ['C5', 'G4', 'C4'] },
+            { name: 'Synth Lead', category: 'Electronic', notes: ['C5', 'G4', 'E4', 'C4'] }
         ];
 
         function init() {
             renderProjects();
-            renderInstruments(instruments);
-            renderTimeline();
+            renderBottomWorkspace();
+            renderMasterTimeline();
         }
 
         function renderProjects() {
@@ -406,7 +410,7 @@
                 const li = document.createElement('li');
                 li.className = `project-item ${p.id === currentProjectId ? 'active' : ''}`;
                 li.innerHTML = `<strong>${p.name}</strong>`;
-                li.onclick = () => switchProject(p.id);
+                li.onclick = () => { switchProject(p.id); };
                 list.appendChild(li);
             });
             const activeProj = projects.find(p => p.id === currentProjectId);
@@ -416,16 +420,19 @@
         function createNewProject() {
             const name = prompt("Enter project name:", `Project ${projects.length + 1}`);
             if (!name) return;
-            const newProj = { id: Date.now(), name: name, tracks: [] };
+            const newProj = { id: Date.now(), name: name, patterns: {} };
             projects.push(newProj);
             saveAndRefresh();
             switchProject(newProj.id);
         }
 
         function switchProject(id) {
+            if (isPlaying) stopPlayback();
             currentProjectId = id;
+            activeInstrument = null;
             renderProjects();
-            renderTimeline();
+            renderBottomWorkspace();
+            renderMasterTimeline();
         }
 
         function saveAndRefresh() {
@@ -433,96 +440,183 @@
             renderProjects();
         }
 
-        function renderInstruments(items) {
+        function renderBottomWorkspace() {
+            const ws = document.getElementById('bottom-workspace');
+            
+            if (!activeInstrument) {
+                // View 1: Instrument Hub List
+                ws.innerHTML = `
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 8px;">
+                        <span class="section-title" style="margin: 0;">Instrument Hub (Click an instrument to open its page)</span>
+                    </div>
+                    <input type="text" class="instrument-search" placeholder="Search instruments..." oninput="filterInstruments(this.value)">
+                    <div class="instrument-grid" id="instrument-grid"></div>
+                `;
+                populateInstrumentGrid(instruments);
+            } else {
+                // View 2: Instrument Sequencer Sub-Page
+                const inst = instruments.find(i => i.name === activeInstrument);
+                ws.innerHTML = `
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 10px;">
+                        <button class="control-btn" onclick="activeInstrument = null; renderBottomWorkspace();">← Back to Instrument Hub</button>
+                        <strong style="font-size: 0.95rem; color: var(--accent);">${inst.name} Sequencer</strong>
+                        <span style="font-size: 0.75rem; color: var(--text-muted);">${inst.category}</span>
+                    </div>
+                    <div class="sequencer-view">
+                        <div class="sequencer-grid-container" id="sequencer-grid"></div>
+                    </div>
+                `;
+                populateSequencerGrid(inst);
+            }
+        }
+
+        function populateInstrumentGrid(items) {
             const grid = document.getElementById('instrument-grid');
+            if (!grid) return;
             grid.innerHTML = '';
             items.forEach(inst => {
                 const card = document.createElement('div');
                 card.className = 'instrument-card';
-                card.draggable = true;
-                card.ondragstart = (e) => {
-                    e.dataTransfer.setData('text/plain', JSON.stringify(inst));
-                };
-
-                let chipsHtml = inst.notes.map(n => `<span class="note-chip" onclick="event.stopPropagation(); playNoteSound('${inst.name}', '${n}')">${n}</span>`).join('');
-                
                 card.innerHTML = `
-                    <div style="display:flex; justify-content:space-between; align-items:center;">
-                        <strong style="font-size:0.85rem;">${inst.name}</strong>
-                        <span style="font-size:0.7rem; color:var(--text-muted);">${inst.category}</span>
-                    </div>
-                    <div class="note-chips">${chipsHtml}</div>
+                    <strong style="font-size:0.9rem;">${inst.name}</strong>
+                    <span style="font-size:0.75rem; color:var(--text-muted);">${inst.category} • Click to open notes</span>
                 `;
+                card.onclick = () => {
+                    activeInstrument = inst.name;
+                    renderBottomWorkspace();
+                };
                 grid.appendChild(card);
             });
         }
 
         function filterInstruments(query) {
             const filtered = instruments.filter(i => i.name.toLowerCase().includes(query.toLowerCase()) || i.category.toLowerCase().includes(query.toLowerCase()));
-            renderInstruments(filtered);
+            populateInstrumentGrid(filtered);
         }
 
-        function toggleDrawer() {
-            drawerOpen = !drawerOpen;
-            const drawer = document.getElementById('instrument-drawer');
-            const icon = document.getElementById('drawer-toggle-icon');
-            if (drawerOpen) {
-                drawer.style.height = '220px';
-                icon.innerText = '▼';
-            } else {
-                drawer.style.height = '40px';
-                icon.innerText = '▲';
+        function populateSequencerGrid(inst) {
+            const container = document.getElementById('sequencer-grid');
+            if (!container) return;
+            container.innerHTML = '';
+
+            const activeProj = projects.find(p => p.id === currentProjectId);
+            if (!activeProj.patterns[inst.name]) {
+                activeProj.patterns[inst.name] = {};
+                inst.notes.forEach(note => {
+                    activeProj.patterns[inst.name][note] = new Array(TOTAL_STEPS).fill(false);
+                });
             }
+
+            inst.notes.forEach(note => {
+                const row = document.createElement('div');
+                row.className = 'sequencer-row';
+
+                const label = document.createElement('div');
+                label.className = 'note-label';
+                label.innerText = note;
+                row.appendChild(label);
+
+                const stepsDiv = document.createElement('div');
+                stepsDiv.className = 'steps-container';
+
+                for (let s = 0; s < TOTAL_STEPS; s++) {
+                    const stepBox = document.createElement('div');
+                    stepBox.className = 'step-box';
+                    if (activeProj.patterns[inst.name][note][s]) {
+                        stepBox.classList.add('active');
+                    }
+                    if (isPlaying && currentStep === s) {
+                        stepBox.classList.add('playing-head');
+                    }
+
+                    stepBox.onclick = () => {
+                        activeProj.patterns[inst.name][note][s] = !activeProj.patterns[inst.name][note][s];
+                        saveAndRefresh();
+                        populateSequencerGrid(inst);
+                        renderMasterTimeline();
+                        if (activeProj.patterns[inst.name][note][s]) {
+                            playTone(inst.name, note);
+                        }
+                    };
+
+                    stepsDiv.appendChild(stepBox);
+                }
+
+                row.appendChild(stepsDiv);
+                container.appendChild(row);
+            });
         }
 
-        function renderTimeline() {
-            const grid = document.getElementById('timeline-grid');
+        function renderMasterTimeline() {
+            const grid = document.getElementById('master-grid');
             const activeProj = projects.find(p => p.id === currentProjectId);
             grid.innerHTML = '';
 
-            if (!activeProj || activeProj.tracks.length === 0) {
-                grid.innerHTML = `<div style="padding: 20px; text-align: center; color: var(--text-muted); font-size: 0.85rem;">Drag instruments from the bottom drawer here to start layering your composition!</div>`;
+            const activeInstruments = Object.keys(activeProj.patterns).filter(instName => {
+                const notesObj = activeProj.patterns[instName];
+                return Object.values(notesObj).some(arr => arr.some(val => val === true));
+            });
+
+            if (activeInstruments.length === 0) {
+                grid.innerHTML = `<div style="color: var(--text-muted); font-size: 0.85rem; text-align: center; padding: 20px;">No notes added yet. Select an instrument below to start placing notes!</div>`;
                 return;
             }
 
-            activeProj.tracks.forEach((track, index) => {
+            activeInstruments.forEach(instName => {
                 const row = document.createElement('div');
-                row.className = 'timeline-track-row';
-                row.innerHTML = `
-                    <div class="timeline-track-label">${track.instrument}</div>
-                    <div class="timeline-track-content">
-                        <span style="font-size: 0.8rem; color: var(--accent); padding-left: 10px;">Note Added: ${track.note}</span>
-                    </div>
-                `;
+                row.className = 'master-track-row';
+                row.innerHTML = `<strong>${instName}</strong> <span style="margin-left: 10px; color: var(--accent);">Active melody pattern saved</span>`;
                 grid.appendChild(row);
             });
         }
 
-        function allowDrop(e) {
-            e.preventDefault();
-        }
-
-        function dropOnTimeline(e) {
-            e.preventDefault();
-            const data = e.dataTransfer.getData('text/plain');
-            if (!data) return;
-            const inst = JSON.parse(data);
-            
-            // For now, add a default note when dropped onto the timeline
-            const noteToAdd = inst.notes[0];
-            playNoteSound(inst.name, noteToAdd);
-
-            const activeProj = projects.find(p => p.id === currentProjectId);
-            if (activeProj) {
-                activeProj.tracks.push({ instrument: inst.name, note: noteToAdd });
-                saveAndRefresh();
-                renderTimeline();
+        function togglePlayback() {
+            initAudio();
+            if (isPlaying) {
+                stopPlayback();
+            } else {
+                startPlayback();
             }
         }
 
-        function togglePlay() {
-            initAudio();
-            alert("Playing full project preview sequence!");
+        function startPlayback() {
+            isPlaying = true;
+            document.getElementById('play-btn').innerText = '⏹ Stop Composition';
+            currentStep = 0;
+
+            playbackTimer = setInterval(() => {
+                playCurrentStep();
+                currentStep = (currentStep + 1) % TOTAL_STEPS;
+                if (activeInstrument) {
+                    const inst = instruments.find(i => i.name === activeInstrument);
+                    if (inst) populateSequencerGrid(inst);
+                }
+            }, 250); // 16th note speed
+        }
+
+        function stopPlayback() {
+            isPlaying = false;
+            clearInterval(playbackTimer);
+            document.getElementById('play-btn').innerText = '▶ Play Full Composition';
+            currentStep = 0;
+            if (activeInstrument) {
+                const inst = instruments.find(i => i.name === activeInstrument);
+                if (inst) populateSequencerGrid(inst);
+            }
+        }
+
+        function playCurrentStep() {
+            const activeProj = projects.find(p => p.id === currentProjectId);
+            if (!activeProj || !activeProj.patterns) return;
+
+            Object.keys(activeProj.patterns).forEach(instName => {
+                const notesObj = activeProj.patterns[instName];
+                Object.keys(notesObj).forEach(noteName => {
+                    if (notesObj[noteName][currentStep]) {
+                        playTone(instName, noteName);
+                    }
+                });
+            });
         }
 
         init();
