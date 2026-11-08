@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Browser Music Lab - Adjustable Track Length</title>
+    <title>Browser Music Lab - Adjustable Note Lengths</title>
     <style>
         :root {
             --bg-dark: #121214;
@@ -15,6 +15,7 @@
             --text-muted: #9ca3af;
             --border: #2e2e38;
             --active-note: #10b981;
+            --active-note-long: #059669;
         }
 
         * {
@@ -322,15 +323,37 @@
             cursor: pointer;
             flex-shrink: 0;
             transition: background 0.1s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.65rem;
+            color: rgba(255,255,255,0.7);
         }
 
         .step-box:hover {
             border-color: var(--accent);
         }
 
-        .step-box.active {
+        .step-box.active-1 {
             background-color: var(--active-note);
             border-color: var(--active-note);
+            color: white;
+        }
+
+        .step-box.active-2 {
+            background-color: #059669;
+            border-color: #047857;
+            width: calc(68px); /* 32 * 2 + gap 4 */
+            color: white;
+            font-weight: bold;
+        }
+
+        .step-box.active-4 {
+            background-color: #047857;
+            border-color: #065f46;
+            width: calc(140px); /* 32 * 4 + gaps */
+            color: white;
+            font-weight: bold;
         }
 
         .step-box.playing-head {
@@ -363,9 +386,9 @@
                         <div class="setting-control">
                             <span>Length:</span>
                             <select id="length-select" onchange="updateTrackLength(this.value)">
-                                <option value="16">16 Steps (1 Bar)</option>
-                                <option value="32" selected>32 Steps (2 Bars)</option>
-                                <option value="64">64 Steps (4 Bars)</option>
+                                <option value="16">16 Steps</option>
+                                <option value="32" selected>32 Steps</option>
+                                <option value="64">64 Steps</option>
                             </select>
                         </div>
                         <div class="setting-control">
@@ -376,7 +399,7 @@
                     </div>
                 </div>
                 <div class="master-grid" id="master-grid">
-                    <div style="color: var(--text-muted); font-size: 0.85rem; text-align: center; padding: 20px;">No notes added yet. Select an instrument below to start placing notes!</div>
+                    <div style="color: var(--text-muted); font-size: 0.85rem; text-align: center; padding: 20px;">No notes added yet. Select an instrument below to start placing notes! (Click a note box to place, click again to extend duration).</div>
                 </div>
             </div>
 
@@ -403,7 +426,7 @@
             }
         }
 
-        function playTone(instrumentName, noteName) {
+        function playTone(instrumentName, noteName, durationSteps = 1, bpm = 120) {
             initAudio();
             const osc = audioCtx.createOscillator();
             const gain = audioCtx.createGain();
@@ -431,14 +454,18 @@
             }
 
             osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+
+            // Calculate duration in seconds based on BPM and steps
+            const stepDurationSec = (15 / bpm) * durationSteps;
+
             gain.gain.setValueAtTime(0.2, audioCtx.currentTime);
-            gain.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + 0.3);
+            gain.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + Math.max(0.2, stepDurationSec));
 
             osc.connect(gain);
             gain.connect(audioCtx.destination);
 
             osc.start();
-            osc.stop(audioCtx.currentTime + 0.3);
+            osc.stop(audioCtx.currentTime + Math.max(0.2, stepDurationSec));
         }
 
         // Resizing Handle
@@ -510,12 +537,13 @@
             if (!activeProj) return;
             activeProj.totalSteps = parseInt(newSteps);
             
-            // Adjust existing arrays if needed
             Object.keys(activeProj.patterns).forEach(instName => {
                 Object.keys(activeProj.patterns[instName]).forEach(noteName => {
                     const arr = activeProj.patterns[instName][noteName];
                     if (arr.length < activeProj.totalSteps) {
-                        while (arr.length < activeProj.totalSteps) arr.push(false);
+                        while (arr.length < activeProj.totalSteps) arr.push(0);
+                    } else if (arr.length > activeProj.totalSteps) {
+                        activeProj.patterns[instName][noteName] = arr.slice(0, activeProj.totalSteps);
                     }
                 });
             });
@@ -582,7 +610,7 @@
                 ws.innerHTML = `
                     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 10px;">
                         <button class="control-btn" onclick="activeInstrument = null; renderBottomWorkspace();">← Back to Instrument Hub</button>
-                        <strong style="font-size: 0.95rem; color: var(--accent);">${inst.name} Notes</strong>
+                        <strong style="font-size: 0.95rem; color: var(--accent);">${inst.name} Notes (Click to set/extend duration)</strong>
                         <span style="font-size: 0.75rem; color: var(--text-muted);">${inst.category}</span>
                     </div>
                     <div class="sequencer-view">
@@ -628,7 +656,7 @@
             if (!activeProj.patterns[inst.name]) {
                 activeProj.patterns[inst.name] = {};
                 inst.notes.forEach(note => {
-                    activeProj.patterns[inst.name][note] = new Array(totalSteps).fill(false);
+                    activeProj.patterns[inst.name][note] = new Array(totalSteps).fill(0);
                 });
             }
 
@@ -644,28 +672,44 @@
                 const stepsDiv = document.createElement('div');
                 stepsDiv.className = 'steps-container';
 
-                // Fill up to totalSteps
                 if (!activeProj.patterns[inst.name][note]) {
-                    activeProj.patterns[inst.name][note] = new Array(totalSteps).fill(false);
+                    activeProj.patterns[inst.name][note] = new Array(totalSteps).fill(0);
                 }
 
+                const patternArr = activeProj.patterns[inst.name][note];
+
                 for (let s = 0; s < totalSteps; s++) {
+                    const duration = patternArr[s];
                     const stepBox = document.createElement('div');
-                    stepBox.className = 'step-box';
-                    if (activeProj.patterns[inst.name][note][s]) {
-                        stepBox.classList.add('active');
+                    
+                    if (duration > 0) {
+                        stepBox.className = `step-box active-${duration}`;
+                        stepBox.innerText = `${duration}x`;
+                    } else {
+                        stepBox.className = 'step-box';
                     }
+
                     if (isPlaying && currentStep === s) {
                         stepBox.classList.add('playing-head');
                     }
 
                     stepBox.onclick = () => {
-                        activeProj.patterns[inst.name][note][s] = !activeProj.patterns[inst.name][note][s];
+                        // Cycle duration: 0 -> 1 -> 2 -> 4 -> 0
+                        let nextDuration = 0;
+                        if (duration === 0) nextDuration = 1;
+                        else if (duration === 1) nextDuration = 2;
+                        else if (duration === 2) nextDuration = 4;
+                        else nextDuration = 0;
+
+                        // Clear any overlapping spans if extending
+                        patternArr[s] = nextDuration;
+                        
                         saveAndRefresh();
                         populateSequencerGrid(inst);
                         renderMasterTimeline();
-                        if (activeProj.patterns[inst.name][note][s]) {
-                            playTone(inst.name, note);
+
+                        if (nextDuration > 0) {
+                            playTone(inst.name, note, nextDuration, currentBpm);
                         }
                     };
 
@@ -684,7 +728,7 @@
 
             const activeInstruments = Object.keys(activeProj.patterns).filter(instName => {
                 const notesObj = activeProj.patterns[instName];
-                return Object.values(notesObj).some(arr => arr.some(val => val === true));
+                return Object.values(notesObj).some(arr => arr.some(val => val > 0));
             });
 
             if (activeInstruments.length === 0) {
@@ -758,8 +802,9 @@
             Object.keys(activeProj.patterns).forEach(instName => {
                 const notesObj = activeProj.patterns[instName];
                 Object.keys(notesObj).forEach(noteName => {
-                    if (notesObj[noteName][currentStep]) {
-                        playTone(instName, noteName);
+                    const duration = notesObj[noteName][currentStep];
+                    if (duration > 0) {
+                        playTone(instName, noteName, duration, currentBpm);
                     }
                 });
             });
