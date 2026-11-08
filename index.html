@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Browser Music Lab - Sideways Timeline & Double-Click Delete</title>
+    <title>Browser Music Lab - Unlimited Steps & Note Labels</title>
     <style>
         :root {
             --bg-dark: #121214;
@@ -164,7 +164,7 @@
 
         .timeline-toolbar {
             display: flex;
-            gap: 12px;
+            gap: 10px;
             align-items: center;
         }
 
@@ -172,10 +172,11 @@
             background-color: var(--bg-card);
             border: 1px solid var(--border);
             color: var(--text-main);
-            padding: 6px 14px;
+            padding: 6px 12px;
             border-radius: 6px;
             cursor: pointer;
             font-weight: 500;
+            font-size: 0.85rem;
         }
 
         .control-btn:hover {
@@ -185,22 +186,23 @@
         .setting-control {
             display: flex;
             align-items: center;
-            gap: 8px;
-            font-size: 0.85rem;
+            gap: 6px;
+            font-size: 0.8rem;
             color: var(--text-muted);
             background-color: var(--bg-card);
-            padding: 4px 10px;
+            padding: 4px 8px;
             border: 1px solid var(--border);
             border-radius: 6px;
         }
 
-        .setting-control select {
+        .setting-control input[type="number"] {
             background-color: var(--bg-panel);
             color: var(--text-main);
             border: 1px solid var(--border);
             border-radius: 4px;
-            padding: 2px 6px;
-            cursor: pointer;
+            width: 55px;
+            padding: 2px 4px;
+            text-align: center;
         }
 
         .setting-control input[type="range"] {
@@ -230,6 +232,15 @@
             padding: 6px 10px;
             border-radius: 4px;
             gap: 15px;
+        }
+
+        .master-track-label {
+            width: 150px;
+            flex-shrink: 0;
+            font-weight: 600;
+            color: var(--text-main);
+            overflow: hidden;
+            text-overflow: ellipsis;
         }
 
         .master-steps-mini {
@@ -351,7 +362,7 @@
         }
 
         .note-label {
-            width: 90px;
+            width: 110px;
             font-size: 0.8rem;
             color: var(--text-muted);
             font-weight: 600;
@@ -378,11 +389,13 @@
             flex-shrink: 0;
             transition: background 0.1s;
             display: flex;
+            flex-direction: column;
             align-items: center;
             justify-content: center;
-            font-size: 0.65rem;
-            color: rgba(255,255,255,0.7);
+            font-size: 0.55rem;
+            color: rgba(255,255,255,0.8);
             user-select: none;
+            line-height: 1.1;
         }
 
         .step-box:hover {
@@ -439,15 +452,12 @@
             <!-- Top: Master Timeline & Playback -->
             <div class="timeline-section">
                 <div class="timeline-header">
-                    <div class="section-title" style="margin: 0;">Sideways Master Timeline</div>
+                    <div class="section-title" style="margin: 0;">Master Timeline (Hover for Instrument Names)</div>
                     <div class="timeline-toolbar">
                         <div class="setting-control">
-                            <span>Length:</span>
-                            <select id="length-select" onchange="updateTrackLength(this.value)">
-                                <option value="16">16 Steps</option>
-                                <option value="32" selected>32 Steps</option>
-                                <option value="64">64 Steps</option>
-                            </select>
+                            <span>Steps:</span>
+                            <input type="number" id="steps-input" value="32" min="8" max="10000" onchange="updateTrackLength(this.value)">
+                            <button class="control-btn" onclick="addSteps(16)">+16 Steps</button>
                         </div>
                         <div class="setting-control">
                             <span>Tempo: <strong id="bpm-display" style="color:var(--text-main);">120</strong> BPM</span>
@@ -607,7 +617,7 @@
 
         function init() {
             renderProjects();
-            syncLengthSelect();
+            syncStepsInput();
             renderBottomWorkspace();
             renderMasterTimeline();
         }
@@ -623,17 +633,20 @@
             return proj;
         }
 
-        function syncLengthSelect() {
+        function syncStepsInput() {
             const activeProj = getActiveProject();
             if (activeProj) {
-                document.getElementById('length-select').value = activeProj.totalSteps;
+                document.getElementById('steps-input').value = activeProj.totalSteps;
             }
         }
 
-        function updateTrackLength(newSteps) {
+        function updateTrackLength(newVal) {
+            let steps = parseInt(newVal);
+            if (isNaN(steps) || steps < 8) steps = 8;
+            
             const activeProj = getActiveProject();
             if (!activeProj) return;
-            activeProj.totalSteps = parseInt(newSteps);
+            activeProj.totalSteps = steps;
             
             Object.keys(activeProj.patterns).forEach(instName => {
                 Object.keys(activeProj.patterns[instName]).forEach(noteName => {
@@ -647,11 +660,19 @@
             });
 
             saveAndRefresh();
+            syncStepsInput();
             if (activeInstrument) {
                 const inst = instruments.find(i => i.name === activeInstrument);
                 if (inst) populateSequencerGrid(inst);
             }
             renderMasterTimeline();
+        }
+
+        function addSteps(amount) {
+            const activeProj = getActiveProject();
+            if (!activeProj) return;
+            const newTotal = (activeProj.totalSteps || 32) + amount;
+            updateTrackLength(newTotal);
         }
 
         function renderProjects() {
@@ -692,7 +713,7 @@
             currentProjectId = id;
             activeInstrument = null;
             renderProjects();
-            syncLengthSelect();
+            syncStepsInput();
             renderBottomWorkspace();
             renderMasterTimeline();
         }
@@ -790,7 +811,7 @@
                     
                     if (duration > 0) {
                         stepBox.className = `step-box active-${duration}`;
-                        stepBox.innerText = `${duration}x`;
+                        stepBox.innerHTML = `<span>${note}</span><span>${duration}x</span>`;
                     } else {
                         stepBox.className = 'step-box';
                     }
@@ -854,7 +875,6 @@
 
             activeInstruments.forEach(instName => {
                 const notesObj = activeProj.patterns[instName];
-                // Combine all notes for this instrument to show on timeline preview
                 const combinedSteps = new Array(totalSteps).fill(false);
                 Object.keys(notesObj).forEach(noteName => {
                     const arr = notesObj[noteName];
@@ -867,9 +887,9 @@
                 row.className = 'master-track-row';
                 
                 const label = document.createElement('div');
-                label.style.width = '140px';
-                label.style.flexShrink = '0';
-                label.innerHTML = `<strong>${instName}</strong>`;
+                label.className = 'master-track-label';
+                label.title = instName; // Hover tooltip shows full instrument name
+                label.innerText = instName;
                 row.appendChild(label);
 
                 const stepsMini = document.createElement('div');
