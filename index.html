@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Browser Music Lab - Tempo & BPM Control</title>
+    <title>Browser Music Lab - Adjustable Track Length</title>
     <style>
         :root {
             --bg-dark: #121214;
@@ -141,7 +141,7 @@
 
         .timeline-toolbar {
             display: flex;
-            gap: 15px;
+            gap: 12px;
             align-items: center;
         }
 
@@ -159,7 +159,7 @@
             border-color: var(--accent);
         }
 
-        .tempo-control {
+        .setting-control {
             display: flex;
             align-items: center;
             gap: 8px;
@@ -171,7 +171,16 @@
             border-radius: 6px;
         }
 
-        .tempo-control input[type="range"] {
+        .setting-control select {
+            background-color: var(--bg-panel);
+            color: var(--text-main);
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            padding: 2px 6px;
+            cursor: pointer;
+        }
+
+        .setting-control input[type="range"] {
             accent-color: var(--accent);
             cursor: pointer;
         }
@@ -295,6 +304,7 @@
             font-size: 0.8rem;
             color: var(--text-muted);
             font-weight: 600;
+            flex-shrink: 0;
         }
 
         .steps-container {
@@ -310,6 +320,7 @@
             border: 1px solid var(--border);
             border-radius: 4px;
             cursor: pointer;
+            flex-shrink: 0;
             transition: background 0.1s;
         }
 
@@ -349,7 +360,15 @@
                 <div class="timeline-header">
                     <div class="section-title" style="margin: 0;">Master Timeline & Controls</div>
                     <div class="timeline-toolbar">
-                        <div class="tempo-control">
+                        <div class="setting-control">
+                            <span>Length:</span>
+                            <select id="length-select" onchange="updateTrackLength(this.value)">
+                                <option value="16">16 Steps (1 Bar)</option>
+                                <option value="32" selected>32 Steps (2 Bars)</option>
+                                <option value="64">64 Steps (4 Bars)</option>
+                            </select>
+                        </div>
+                        <div class="setting-control">
                             <span>Tempo: <strong id="bpm-display" style="color:var(--text-main);">120</strong> BPM</span>
                             <input type="range" id="bpm-slider" min="60" max="180" value="120" oninput="updateTempo(this.value)">
                         </div>
@@ -422,7 +441,7 @@
             osc.stop(audioCtx.currentTime + 0.3);
         }
 
-        // Panel Resizing Logic
+        // Resizing Handle
         const resizeHandle = document.getElementById('resize-handle');
         const bottomWorkspace = document.getElementById('bottom-workspace');
         let isResizing = false;
@@ -449,12 +468,11 @@
 
         // State Management
         let projects = JSON.parse(localStorage.getItem('music_lab_projects')) || [
-            { id: 1, name: 'My First Beat', patterns: {} }
+            { id: 1, name: 'My First Beat', patterns: {}, totalSteps: 32 }
         ];
         let currentProjectId = projects[0].id;
         let activeInstrument = null;
         
-        const TOTAL_STEPS = 16;
         let currentBpm = 120;
         let isPlaying = false;
         let currentStep = 0;
@@ -471,8 +489,42 @@
 
         function init() {
             renderProjects();
+            syncLengthSelect();
             renderBottomWorkspace();
             renderMasterTimeline();
+        }
+
+        function getActiveProject() {
+            return projects.find(p => p.id === currentProjectId);
+        }
+
+        function syncLengthSelect() {
+            const activeProj = getActiveProject();
+            if (activeProj) {
+                document.getElementById('length-select').value = activeProj.totalSteps || 32;
+            }
+        }
+
+        function updateTrackLength(newSteps) {
+            const activeProj = getActiveProject();
+            if (!activeProj) return;
+            activeProj.totalSteps = parseInt(newSteps);
+            
+            // Adjust existing arrays if needed
+            Object.keys(activeProj.patterns).forEach(instName => {
+                Object.keys(activeProj.patterns[instName]).forEach(noteName => {
+                    const arr = activeProj.patterns[instName][noteName];
+                    if (arr.length < activeProj.totalSteps) {
+                        while (arr.length < activeProj.totalSteps) arr.push(false);
+                    }
+                });
+            });
+
+            saveAndRefresh();
+            if (activeInstrument) {
+                const inst = instruments.find(i => i.name === activeInstrument);
+                if (inst) populateSequencerGrid(inst);
+            }
         }
 
         function renderProjects() {
@@ -485,14 +537,14 @@
                 li.onclick = () => { switchProject(p.id); };
                 list.appendChild(li);
             });
-            const activeProj = projects.find(p => p.id === currentProjectId);
+            const activeProj = getActiveProject();
             document.getElementById('current-project-label').innerText = `Project: ${activeProj ? activeProj.name : 'Untitled'}`;
         }
 
         function createNewProject() {
             const name = prompt("Enter project name:", `Project ${projects.length + 1}`);
             if (!name) return;
-            const newProj = { id: Date.now(), name: name, patterns: {} };
+            const newProj = { id: Date.now(), name: name, patterns: {}, totalSteps: 32 };
             projects.push(newProj);
             saveAndRefresh();
             switchProject(newProj.id);
@@ -503,6 +555,7 @@
             currentProjectId = id;
             activeInstrument = null;
             renderProjects();
+            syncLengthSelect();
             renderBottomWorkspace();
             renderMasterTimeline();
         }
@@ -569,11 +622,13 @@
             if (!container) return;
             container.innerHTML = '';
 
-            const activeProj = projects.find(p => p.id === currentProjectId);
+            const activeProj = getActiveProject();
+            const totalSteps = activeProj.totalSteps || 32;
+
             if (!activeProj.patterns[inst.name]) {
                 activeProj.patterns[inst.name] = {};
                 inst.notes.forEach(note => {
-                    activeProj.patterns[inst.name][note] = new Array(TOTAL_STEPS).fill(false);
+                    activeProj.patterns[inst.name][note] = new Array(totalSteps).fill(false);
                 });
             }
 
@@ -589,7 +644,12 @@
                 const stepsDiv = document.createElement('div');
                 stepsDiv.className = 'steps-container';
 
-                for (let s = 0; s < TOTAL_STEPS; s++) {
+                // Fill up to totalSteps
+                if (!activeProj.patterns[inst.name][note]) {
+                    activeProj.patterns[inst.name][note] = new Array(totalSteps).fill(false);
+                }
+
+                for (let s = 0; s < totalSteps; s++) {
                     const stepBox = document.createElement('div');
                     stepBox.className = 'step-box';
                     if (activeProj.patterns[inst.name][note][s]) {
@@ -619,7 +679,7 @@
 
         function renderMasterTimeline() {
             const grid = document.getElementById('master-grid');
-            const activeProj = projects.find(p => p.id === currentProjectId);
+            const activeProj = getActiveProject();
             grid.innerHTML = '';
 
             const activeInstruments = Object.keys(activeProj.patterns).filter(instName => {
@@ -644,7 +704,6 @@
             currentBpm = parseInt(val);
             document.getElementById('bpm-display').innerText = currentBpm;
             if (isPlaying) {
-                // Restart timer with new interval speed on the fly
                 clearInterval(playbackTimer);
                 startPlaybackTimer();
             }
@@ -667,12 +726,13 @@
         }
 
         function startPlaybackTimer() {
-            // Formula: 15000 / BPM gives the millisecond interval for 16th notes
+            const activeProj = getActiveProject();
+            const totalSteps = activeProj ? (activeProj.totalSteps || 32) : 32;
             const intervalMs = 15000 / currentBpm;
 
             playbackTimer = setInterval(() => {
                 playCurrentStep();
-                currentStep = (currentStep + 1) % TOTAL_STEPS;
+                currentStep = (currentStep + 1) % totalSteps;
                 if (activeInstrument) {
                     const inst = instruments.find(i => i.name === activeInstrument);
                     if (inst) populateSequencerGrid(inst);
@@ -692,7 +752,7 @@
         }
 
         function playCurrentStep() {
-            const activeProj = projects.find(p => p.id === currentProjectId);
+            const activeProj = getActiveProject();
             if (!activeProj || !activeProj.patterns) return;
 
             Object.keys(activeProj.patterns).forEach(instName => {
