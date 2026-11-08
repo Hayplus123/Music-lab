@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Browser Music Lab - Adjustable Note Lengths</title>
+    <title>Browser Music Lab - Renaming & Upgraded Sound</title>
     <style>
         :root {
             --bg-dark: #121214;
@@ -48,6 +48,27 @@
         header h1 {
             font-size: 1rem;
             font-weight: 600;
+        }
+
+        .project-title-area {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .rename-btn {
+            background: none;
+            border: 1px solid var(--border);
+            color: var(--text-muted);
+            padding: 2px 6px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.75rem;
+        }
+
+        .rename-btn:hover {
+            color: var(--text-main);
+            border-color: var(--accent);
         }
 
         /* Workspace Layout */
@@ -343,7 +364,7 @@
         .step-box.active-2 {
             background-color: #059669;
             border-color: #047857;
-            width: calc(68px); /* 32 * 2 + gap 4 */
+            width: calc(68px);
             color: white;
             font-weight: bold;
         }
@@ -351,7 +372,7 @@
         .step-box.active-4 {
             background-color: #047857;
             border-color: #065f46;
-            width: calc(140px); /* 32 * 4 + gaps */
+            width: calc(140px);
             color: white;
             font-weight: bold;
         }
@@ -365,7 +386,10 @@
 
     <header>
         <h1>🎵 Open Music Lab</h1>
-        <span id="current-project-label" style="color: var(--text-muted); font-size: 0.85rem;">Project: Untitled</span>
+        <div class="project-title-area">
+            <span id="current-project-label" style="color: var(--text-muted); font-size: 0.85rem;">Project: Untitled</span>
+            <button class="rename-btn" onclick="renameCurrentProject()">✏️ Rename</button>
+        </div>
     </header>
 
     <div class="workspace-container">
@@ -399,7 +423,7 @@
                     </div>
                 </div>
                 <div class="master-grid" id="master-grid">
-                    <div style="color: var(--text-muted); font-size: 0.85rem; text-align: center; padding: 20px;">No notes added yet. Select an instrument below to start placing notes! (Click a note box to place, click again to extend duration).</div>
+                    <div style="color: var(--text-muted); font-size: 0.85rem; text-align: center; padding: 20px;">No notes added yet. Select an instrument below to start placing notes!</div>
                 </div>
             </div>
 
@@ -407,9 +431,7 @@
             <div class="resize-handle" id="resize-handle" title="Drag to resize panels"></div>
 
             <!-- Bottom: Instrument Hub / Sub-Page Workspace -->
-            <div class="instrument-workspace" id="bottom-workspace">
-                <!-- Dynamically swapped between Instrument List and Sequencer Sub-Page -->
-            </div>
+            <div class="instrument-workspace" id="bottom-workspace"></div>
         </div>
     </div>
 
@@ -426,10 +448,11 @@
             }
         }
 
+        // Upgraded Synthesis Engine for Realistic Timbre
         function playTone(instrumentName, noteName, durationSteps = 1, bpm = 120) {
             initAudio();
-            const osc = audioCtx.createOscillator();
-            const gain = audioCtx.createGain();
+            const now = audioCtx.currentTime;
+            const stepDurationSec = (15 / bpm) * durationSteps;
 
             let freq = 440;
             if (noteName.includes('C5')) freq = 523.25;
@@ -440,32 +463,71 @@
             else if (noteName.includes('E4')) freq = 329.63;
             else if (noteName.includes('D4')) freq = 293.66;
             else if (noteName.includes('C4')) freq = 261.63;
-            else if (noteName.includes('High')) freq = 1400;
-            else if (noteName.includes('Mid')) freq = 900;
-            else if (noteName.includes('Low')) freq = 400;
-            else if (noteName.includes('Tap')) freq = 300;
+            else if (noteName.includes('B3')) freq = 246.94;
+            else if (noteName.includes('A3')) freq = 220.00;
+
+            const gainNode = audioCtx.createGain();
+            gainNode.connect(audioCtx.destination);
 
             if (instrumentName.includes('Jingle')) {
-                osc.type = 'triangle';
-            } else if (instrumentName.includes('Stick') || instrumentName.includes('Woodblock')) {
-                osc.type = 'square';
-            } else {
-                osc.type = 'sine';
+                // Metallic bell synthesis: multiple inharmonic frequencies + high pass filter
+                [1200, 1850, 2400, 3100].forEach(f => {
+                    const osc = audioCtx.createOscillator();
+                    const bellGain = audioCtx.createGain();
+                    osc.type = 'sine';
+                    osc.frequency.setValueAtTime(f, now);
+                    bellGain.gain.setValueAtTime(0.08, now);
+                    bellGain.gain.exponentialRampToValueAtTime(0.0001, now + Math.max(0.3, stepDurationSec));
+                    osc.connect(bellGain);
+                    bellGain.connect(gainNode);
+                    osc.start(now);
+                    osc.stop(now + Math.max(0.3, stepDurationSec));
+                });
+                return;
             }
 
-            osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+            if (instrumentName.includes('Stick') || instrumentName.includes('Woodblock')) {
+                // Woodblock synthesis: short noise burst + resonant modal tone
+                const bufferSize = audioCtx.sampleRate * 0.05;
+                const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+                const data = buffer.getChannelData(0);
+                for (let i = 0; i < bufferSize; i++) {
+                    data[i] = Math.random() * 2 - 1;
+                }
+                const noise = audioCtx.createBufferSource();
+                noise.buffer = buffer;
 
-            // Calculate duration in seconds based on BPM and steps
-            const stepDurationSec = (15 / bpm) * durationSteps;
+                const filter = audioCtx.createBiquadFilter();
+                filter.type = 'bandpass';
+                filter.frequency.setValueAtTime(800, now);
+                filter.Q.setValueAtTime(5, now);
 
-            gain.gain.setValueAtTime(0.2, audioCtx.currentTime);
-            gain.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + Math.max(0.2, stepDurationSec));
+                const noiseGain = audioCtx.createGain();
+                noiseGain.gain.setValueAtTime(0.3, now);
+                noiseGain.gain.exponentialRampToValueAtTime(0.001, now + 0.04);
 
-            osc.connect(gain);
-            gain.connect(audioCtx.destination);
+                noise.connect(filter);
+                filter.connect(noiseGain);
+                noiseGain.connect(gainNode);
+                noise.start(now);
+                return;
+            }
 
-            osc.start();
-            osc.stop(audioCtx.currentTime + Math.max(0.2, stepDurationSec));
+            // Standard melodic instruments (Piano, Guitar, Flute, Synth)
+            const osc = audioCtx.createOscillator();
+            if (instrumentName.includes('Piano')) osc.type = 'triangle';
+            else if (instrumentName.includes('Guitar')) osc.type = 'sawtooth';
+            else if (instrumentName.includes('Flute')) osc.type = 'sine';
+            else osc.type = 'square';
+
+            osc.frequency.setValueAtTime(freq, now);
+
+            gainNode.gain.setValueAtTime(0.2, now);
+            gainNode.gain.exponentialRampToValueAtTime(0.0001, now + Math.max(0.3, stepDurationSec));
+
+            osc.connect(gainNode);
+            osc.start(now);
+            osc.stop(now + Math.max(0.3, stepDurationSec));
         }
 
         // Resizing Handle
@@ -507,8 +569,8 @@
 
         const instruments = [
             { name: 'Acoustic Grand Piano', category: 'Keys', notes: ['C5', 'B4', 'A4', 'G4', 'F4', 'E4', 'D4', 'C4'] },
-            { name: 'Jingle Bell', category: 'Percussion', notes: ['High Jingles', 'Mid Jingles', 'Low Jingles', 'Single Tap'] },
-            { name: 'Stick Tap / Woodblock', category: 'Percussion', notes: ['High Wood', 'Mid Wood', 'Low Wood', 'Rim Tap'] },
+            { name: 'Jingle Bell', category: 'Percussion', notes: ['High Jingles', 'Mid Jingles', 'Low Jingles'] },
+            { name: 'Stick Tap / Woodblock', category: 'Percussion', notes: ['Wood Tap'] },
             { name: 'Acoustic Guitar', category: 'Strings', notes: ['G4', 'F4', 'E4', 'D4', 'C4', 'B3', 'A3'] },
             { name: 'Flute', category: 'Woodwind', notes: ['C5', 'B4', 'A4', 'G4', 'F4', 'E4', 'D4', 'C4'] },
             { name: 'Synth Lead', category: 'Electronic', notes: ['C5', 'B4', 'A4', 'G4', 'F4', 'E4', 'D4', 'C4'] }
@@ -578,6 +640,16 @@
             switchProject(newProj.id);
         }
 
+        function renameCurrentProject() {
+            const activeProj = getActiveProject();
+            if (!activeProj) return;
+            const newName = prompt("Enter new project name:", activeProj.name);
+            if (!newName) return;
+            activeProj.name = newName;
+            saveAndRefresh();
+            renderProjects();
+        }
+
         function switchProject(id) {
             if (isPlaying) stopPlayback();
             currentProjectId = id;
@@ -610,7 +682,7 @@
                 ws.innerHTML = `
                     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 10px;">
                         <button class="control-btn" onclick="activeInstrument = null; renderBottomWorkspace();">← Back to Instrument Hub</button>
-                        <strong style="font-size: 0.95rem; color: var(--accent);">${inst.name} Notes (Click to set/extend duration)</strong>
+                        <strong style="font-size: 0.95rem; color: var(--accent);">${inst.name} Notes</strong>
                         <span style="font-size: 0.75rem; color: var(--text-muted);">${inst.category}</span>
                     </div>
                     <div class="sequencer-view">
@@ -694,14 +766,12 @@
                     }
 
                     stepBox.onclick = () => {
-                        // Cycle duration: 0 -> 1 -> 2 -> 4 -> 0
                         let nextDuration = 0;
                         if (duration === 0) nextDuration = 1;
                         else if (duration === 1) nextDuration = 2;
                         else if (duration === 2) nextDuration = 4;
                         else nextDuration = 0;
 
-                        // Clear any overlapping spans if extending
                         patternArr[s] = nextDuration;
                         
                         saveAndRefresh();
