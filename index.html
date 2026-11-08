@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Open Music Lab - Fixed Note Validation & Clean Code</title>
+    <title>Open Music Lab - Highlight Active Instruments</title>
     <style>
         :root {
             --bg-dark: #121214;
@@ -453,7 +453,7 @@
             <!-- Bottom: Instrument Bar / Drawer -->
             <div class="instrument-workspace" id="bottom-workspace">
                 <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 6px;">
-                    <span class="section-title" style="margin: 0;">Instrument Palette & Search (Double-click instrument to inspect notes)</span>
+                    <span class="section-title" style="margin: 0;">Instrument Palette & Search (Double-click any instrument to highlight all active ones on the board)</span>
                 </div>
                 <input type="text" class="instrument-search" id="instrument-search" placeholder="Search instruments by name or category..." oninput="filterInstruments(this.value)">
                 <div class="instrument-grid" id="instrument-grid">
@@ -502,7 +502,7 @@
         ];
 
         let activeInstrumentName = instruments[0].name;
-        let focusedInstrumentName = null;
+        let highlightActiveOnBoard = false; // Toggle for highlighting all instruments currently on the board
 
         // Master Pitch Rows
         const masterPitchRows = [
@@ -637,11 +637,11 @@
             document.body.style.cursor = 'default';
         });
 
-        // Deselect instrument focus when clicking outside cards
+        // Click outside instrument palette to reset highlight mode ("click nothing")
         window.addEventListener('click', (e) => {
             if (!e.target.closest('.palette-item') && !e.target.closest('.instrument-search')) {
-                if (focusedInstrumentName) {
-                    focusedInstrumentName = null;
+                if (highlightActiveOnBoard) {
+                    highlightActiveOnBoard = false;
                     renderInstrumentGrid(instruments);
                 }
             }
@@ -673,6 +673,20 @@
             if (!proj.notesData) proj.notesData = {};
             if (!proj.totalSteps) proj.totalSteps = 32;
             return proj;
+        }
+
+        function getActiveInstrumentsOnBoard() {
+            const activeProj = getActiveProject();
+            const usedInstruments = new Set();
+            Object.keys(activeProj.notesData).forEach(step => {
+                const stepNotes = activeProj.notesData[step];
+                Object.keys(stepNotes).forEach(note => {
+                    if (stepNotes[note] && stepNotes[note].instrument) {
+                        usedInstruments.add(stepNotes[note].instrument);
+                    }
+                });
+            });
+            return usedInstruments;
         }
 
         function syncStepsInput() {
@@ -719,27 +733,29 @@
         function renderInstrumentGrid(items) {
             const grid = document.getElementById('instrument-grid');
             grid.innerHTML = '';
+            const activeOnBoard = getActiveInstrumentsOnBoard();
+
             items.forEach(inst => {
                 const item = document.createElement('div');
                 
                 let itemClass = 'palette-item';
                 if (activeInstrumentName === inst.name) itemClass += ' active';
-                if (focusedInstrumentName) {
-                    if (focusedInstrumentName === inst.name) itemClass += ' focused';
-                    else itemClass += ' faded';
-                }
-                item.className = itemClass;
 
-                let notesDisplay = `${inst.notes.length} note(s)`;
-                if (focusedInstrumentName === inst.name) {
-                    notesDisplay = `Notes: [${inst.notes.join(', ')}]`;
+                if (highlightActiveOnBoard) {
+                    if (activeOnBoard.has(inst.name)) {
+                        itemClass += ' focused';
+                    } else {
+                        itemClass += ' faded';
+                    }
                 }
+
+                item.className = itemClass;
 
                 item.innerHTML = `
                     <div class="color-dot" style="background-color: ${inst.color};"></div>
                     <div style="flex:1;">
                         <div style="font-weight:600; font-size:0.85rem;">${inst.name}</div>
-                        <div style="font-size:0.75rem; color:var(--text-muted);">${inst.category} • ${notesDisplay}</div>
+                        <div style="font-size:0.75rem; color:var(--text-muted);">${inst.category} • ${inst.notes.length} note(s)</div>
                     </div>
                 `;
 
@@ -749,9 +765,10 @@
                     renderInstrumentGrid(instruments.filter(i => i.name.toLowerCase().includes(document.getElementById('instrument-search').value.toLowerCase()) || i.category.toLowerCase().includes(document.getElementById('instrument-search').value.toLowerCase())));
                 };
 
+                // Double click toggles highlighting all instruments currently on the board
                 item.ondblclick = (e) => {
                     e.stopPropagation();
-                    focusedInstrumentName = (focusedInstrumentName === inst.name) ? null : inst.name;
+                    highlightActiveOnBoard = !highlightActiveOnBoard;
                     renderInstrumentGrid(instruments.filter(i => i.name.toLowerCase().includes(document.getElementById('instrument-search').value.toLowerCase()) || i.category.toLowerCase().includes(document.getElementById('instrument-search').value.toLowerCase())));
                 };
 
@@ -846,7 +863,7 @@
                         stepBox.classList.add('playing-head');
                     }
 
-                    // Single Click Validation (permits single-note instruments on their correct note)
+                    // Single Click Validation
                     stepBox.onclick = (e) => {
                         e.stopPropagation();
                         const instObj = instruments.find(i => i.name === activeInstrumentName);
