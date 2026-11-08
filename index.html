@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Open Music Lab - Expanded & Validated</title>
+    <title>Open Music Lab - Validated Notes & Feedback</title>
     <style>
         :root {
             --bg-dark: #121214;
@@ -38,10 +38,10 @@
             position: fixed;
             top: 10px;
             left: 50%;
-            transform: translateX(-50%) translateY(-60px);
+            transform: translateX(-50%) translateY(-70px);
             background-color: var(--error-bg);
             color: white;
-            padding: 8px 18px;
+            padding: 10px 20px;
             border-radius: 6px;
             font-size: 0.85rem;
             font-weight: 600;
@@ -49,6 +49,8 @@
             transition: transform 0.3s ease;
             z-index: 1000;
             pointer-events: none;
+            max-width: 90%;
+            text-align: center;
         }
 
         #notification-banner.show {
@@ -463,7 +465,7 @@
             }
         }
 
-        // Expanded Instrument Library with explicit valid notes arrays
+        // Expanded Instrument Library with explicit valid notes arrays[cite: 3, 4, 5]
         const instruments = [
             { name: 'Acoustic Grand Piano', category: 'Keys', color: '#3b82f6', notes: ['C5', 'B4', 'A4', 'G4', 'F4', 'E4', 'D4', 'C4', 'B3', 'A3', 'G3', 'F3', 'E3', 'D3', 'C3'] },
             { name: 'Electric Piano', category: 'Keys', color: '#2563eb', notes: ['C5', 'B4', 'A4', 'G4', 'F4', 'E4', 'D4', 'C4', 'B3', 'A3', 'G3', 'F3', 'E3'] },
@@ -482,7 +484,7 @@
             { name: 'Marimba', category: 'Percussion', color: '#14b8a6', notes: ['C5', 'B4', 'A4', 'G4', 'F4', 'E4', 'D4', 'C4', 'B3', 'A3'] },
             { name: 'Xylophone', category: 'Percussion', color: '#0d9488', notes: ['C5', 'B4', 'A4', 'G4', 'F4', 'E4', 'D4', 'C4'] },
             { name: 'Jingle Bell', category: 'Percussion', color: '#ec4899', notes: ['C5', 'B4', 'A4', 'G4'] },
-            { name: 'Stick Tap / Woodblock', category: 'Percussion', color: '#f97316', notes: ['C4'] }, // Has only 1 note! Will trigger validation error if used.
+            { name: 'Stick Tap / Woodblock', category: 'Percussion', color: '#f97316', notes: ['C4'] },
             { name: 'Drum Kit (Kick)', category: 'Drums', color: '#eab308', notes: ['Kick'] },
             { name: 'Drum Kit (Snare)', category: 'Drums', color: '#84cc16', notes: ['Snare'] },
             { name: 'Drum Kit (Hi-Hat)', category: 'Drums', color: '#06b6d4', notes: ['Hi-Hat'] },
@@ -504,7 +506,7 @@
             banner.classList.add('show');
             setTimeout(() => {
                 banner.classList.remove('show');
-            }, 3000);
+            }, 4000);
         }
 
         function playTone(instrumentName, noteName, durationSteps = 1, bpm = 120) {
@@ -801,13 +803,17 @@
                         stepBox.classList.add('playing-head');
                     }
 
-                    // Single click: Validate and Place note or cycle duration
+                    // Single click: Strict Validation and Notification showing available notes
                     stepBox.onclick = () => {
                         const instObj = instruments.find(i => i.name === activeInstrumentName);
 
-                        // Validation Check: If instrument has <= 1 note OR note does not exist in its allowed notes array
-                        if (!instObj || instObj.notes.length <= 1 || !instObj.notes.includes(note)) {
-                            showNotification("No notes found for this instrument.");
+                        if (!instObj || instObj.notes.length <= 1) {
+                            showNotification(`No notes found for ${activeInstrumentName}.`);
+                            return;
+                        }
+
+                        if (!instObj.notes.includes(note)) {
+                            showNotification(`"${note}" not found for ${activeInstrumentName}. Available: [${instObj.notes.join(', ')}]`);
                             return;
                         }
 
