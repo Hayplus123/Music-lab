@@ -283,12 +283,20 @@
             border-right: 1px solid var(--border);
             flex-shrink: 0;
             background-color: var(--bg-panel);
+            z-index: 30;
         }
 
         .ruler-ticks-container {
             flex: 1;
             position: relative;
-            overflow: hidden;
+            overflow-x: hidden;
+            height: 100%;
+        }
+
+        .ruler-inner-ticks {
+            position: absolute;
+            top: 0;
+            left: 0;
             height: 100%;
         }
 
@@ -576,11 +584,13 @@
             </div>
 
             <div class="timeline-container">
-                <!-- Ruler with fixed 140px spacer -->
+                <!-- Ruler with fixed 140px spacer and synchronized scrolling -->
                 <div class="timeline-ruler" id="timeline-ruler">
                     <div class="ruler-spacer"></div>
                     <div class="ruler-ticks-container" id="ruler-ticks-container">
-                        <div id="playhead"></div>
+                        <div class="ruler-inner-ticks" id="ruler-inner-ticks">
+                            <div id="playhead"></div>
+                        </div>
                     </div>
                 </div>
 
@@ -652,6 +662,14 @@
         function init() {
             renderProjects();
             renderInstrumentFolders();
+            
+            // Synchronize Horizontal Scroll between Track Viewport and Ruler Ticks
+            const viewport = document.getElementById('tracks-viewport');
+            const rulerInner = document.getElementById('ruler-inner-ticks');
+            viewport.addEventListener('scroll', () => {
+                rulerInner.style.transform = `translateX(-${viewport.scrollLeft}px)`;
+            });
+
             renderTimeline();
             updateTimeDisplay(0);
 
@@ -772,26 +790,31 @@
 
         function renderTimeline() {
             const innerWrapper = document.getElementById('tracks-inner-wrapper');
-            const ticksContainer = document.getElementById('ruler-ticks-container');
+            const rulerInner = document.getElementById('ruler-inner-ticks');
             innerWrapper.innerHTML = '';
+            
             const playhead = document.getElementById('playhead');
-            ticksContainer.innerHTML = '';
-            ticksContainer.appendChild(playhead);
+            rulerInner.innerHTML = '';
+            rulerInner.appendChild(playhead);
 
             const activeProj = getActiveProject();
             const pxPerSec = 100 * zoomLevel;
 
-            // Calculate dynamic total timeline duration (at least 180 seconds, or extends further if notes are placed past it)
-            let maxClipTime = 180; // default 3 minutes
+            // Canva-style Auto Expansion calculation:
+            // Ensures timeline has room past the furthest note or at least 180s
+            let maxClipEnd = 180;
             activeProj.clips.forEach(clip => {
-                const endTime = clip.start + clip.duration + 15;
-                if (endTime > maxClipTime) maxClipTime = endTime;
+                const clipEnd = clip.start + clip.duration;
+                if (clipEnd + 10 > maxClipEnd) {
+                    maxClipEnd = clipEnd + 10;
+                }
             });
 
-            // Set inner wrapper width so horizontal scrolling covers the full timeline duration
-            innerWrapper.style.width = `${maxClipTime * pxPerSec}px`;
+            // Set inner elements widths based on timeline length
+            innerWrapper.style.width = `${maxClipEnd * pxPerSec}px`;
+            rulerInner.style.width = `${maxClipEnd * pxPerSec}px`;
 
-            // Pixel-driven dynamic interval calculation for ruler ticks
+            // Smart Dynamic interval calculation for ruler ticks
             const targetPixels = 80;
             const niceSteps = [0.001, 0.002, 0.005, 0.01, 0.02, 0.05, 0.1, 0.2, 0.5, 1, 2, 5, 10, 15, 30, 60, 120, 300, 600];
             let step = niceSteps[niceSteps.length - 1];
@@ -802,7 +825,7 @@
                 }
             }
 
-            for (let sec = 0; sec <= maxClipTime; sec += step) {
+            for (let sec = 0; sec <= maxClipEnd; sec += step) {
                 const marker = document.createElement('div');
                 marker.className = 'ruler-marker';
                 marker.style.left = `${sec * pxPerSec}px`;
@@ -816,7 +839,7 @@
                 } else {
                     marker.innerText = `${mins}:${String(secs).padStart(2,'0')}`;
                 }
-                ticksContainer.appendChild(marker);
+                rulerInner.appendChild(marker);
             }
 
             for (let trackIdx = 0; trackIdx < 6; trackIdx++) {
@@ -830,7 +853,7 @@
 
                 const trackArea = document.createElement('div');
                 trackArea.className = 'track-timeline-area';
-                trackArea.style.width = `${maxClipTime * pxPerSec}px`;
+                trackArea.style.width = `${maxClipEnd * pxPerSec}px`;
 
                 trackArea.ondragover = (e) => {
                     e.preventDefault();
@@ -890,6 +913,7 @@
                         <div class="clip-resize-handle" title="Drag edge to resize duration"></div>
                     `;
 
+                    // DRAG EXISTING NOTE CLIP WITH AUTO-EXPAND
                     clipEl.onmousedown = (e) => {
                         if (e.target.classList.contains('clip-resize-handle')) return;
                         e.stopPropagation();
@@ -905,6 +929,11 @@
                             const newStart = Math.max(0, initialStart + (dx / pxPerSec));
                             clip.start = newStart;
                             clipEl.style.left = `${clip.start * pxPerSec}px`;
+
+                            // If dragged near or beyond current boundary, dynamically re-render timeline expansion
+                            if (clip.start + clip.duration + 5 > maxClipEnd) {
+                                renderTimeline();
+                            }
                         }
 
                         function onMouseUp() {
@@ -936,6 +965,10 @@
                             const newDuration = Math.max(0.001, initialDuration + (dx / pxPerSec));
                             clip.duration = newDuration;
                             clipEl.style.width = `${clip.duration * pxPerSec}px`;
+
+                            if (clip.start + clip.duration + 5 > maxClipEnd) {
+                                renderTimeline();
+                            }
                         }
 
                         function onResizeUp() {
@@ -1095,7 +1128,6 @@
                     }
                 });
 
-                // Dynamically stop playback if we reach the end of the timeline
                 let maxTime = 180;
                 activeProj.clips.forEach(c => { if (c.start + c.duration > maxTime) maxTime = c.start + c.duration + 5; });
                 if (playbackTimeSec > maxTime) stopPlayback();
