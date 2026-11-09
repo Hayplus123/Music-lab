@@ -275,7 +275,21 @@
             flex-shrink: 0;
             overflow: hidden;
             user-select: none;
-            padding-left: 140px; /* Exact match to track header width */
+        }
+
+        /* Exact 140px spacer so 00:00 starts after track header column */
+        .ruler-spacer {
+            width: 140px;
+            min-width: 140px;
+            border-right: 1px solid var(--border);
+            flex-shrink: 0;
+        }
+
+        .ruler-ticks-container {
+            flex: 1;
+            position: relative;
+            overflow: hidden;
+            height: 100%;
         }
 
         .ruler-marker {
@@ -537,7 +551,7 @@
                 <div class="toolbar-group">
                     <div class="setting-control">
                         <span>Zoom:</span>
-                        <input type="range" id="zoom-slider" min="0.5" max="3" step="0.1" value="1" oninput="updateZoom(this.value)">
+                        <input type="range" id="zoom-slider" min="0.1" max="1000" step="0.1" value="1" oninput="updateZoom(this.value)" title="Zoom from 1 sec default down to 0.001 precision">
                     </div>
                     <div class="setting-control">
                         <span>Tempo: <strong id="bpm-display" style="color:var(--text-main);">120</strong> BPM</span>
@@ -547,9 +561,12 @@
             </div>
 
             <div class="timeline-container">
-                <!-- Ruler / Time markers aligned perfectly with track content -->
+                <!-- Ruler / Time markers aligned precisely after track headers -->
                 <div class="timeline-ruler" id="timeline-ruler">
-                    <div id="playhead"></div>
+                    <div class="ruler-spacer"></div>
+                    <div class="ruler-ticks-container" id="ruler-ticks-container">
+                        <div id="playhead"></div>
+                    </div>
                 </div>
 
                 <!-- Tracks Viewport -->
@@ -560,7 +577,7 @@
 
             <!-- Bottom Instrument Folders Bank -->
             <div class="bottom-instrument-bank">
-                <div class="section-title" style="margin-bottom:6px;">Instrument Bank (Hover folder to open, click note to highlight in timeline)</div>
+                <div class="section-title" style="margin-bottom:6px;">Instrument Bank (Double-click folder header OR note chip to highlight in timeline)</div>
                 <div class="folder-grid-row" id="folder-grid-row">
                     <!-- Populated via JS -->
                 </div>
@@ -600,7 +617,8 @@
         ];
         let currentProjectId = projects[0].id;
         let selectedClipId = null;
-        let highlightedNoteFilter = null;
+        let highlightedNoteFilter = null;       // { type: 'note', instrument, note }
+        let highlightedInstrumentFilter = null; // { type: 'instrument', instrument }
         let isPlaying = false;
         let playbackTimeSec = 0;
         let playbackTimer = null;
@@ -667,11 +685,12 @@
             currentProjectId = id;
             selectedClipId = null;
             highlightedNoteFilter = null;
+            highlightedInstrumentFilter = null;
             renderProjects();
             renderTimeline();
         }
 
-        // Render Bottom Folders Bank
+        // Render Bottom Folders Bank with Double-Click Highlighting
         function renderInstrumentFolders() {
             const gridRow = document.getElementById('folder-grid-row');
             gridRow.innerHTML = '';
@@ -687,6 +706,7 @@
                     <span style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${inst.name}</span>
                 `;
 
+                // Single click adds clip to Track 1
                 header.onclick = () => {
                     const activeProj = getActiveProject();
                     activeProj.clips.push({
@@ -702,6 +722,20 @@
                     showNotification(`Added ${inst.name} (${inst.notes[0]}) to Track 1`);
                 };
 
+                // DOUBLE-CLICK FOLDER HEADER -> Highlights entire instrument across timeline
+                header.ondblclick = (e) => {
+                    e.stopPropagation();
+                    highlightedNoteFilter = null;
+                    if (highlightedInstrumentFilter && highlightedInstrumentFilter.instrument === inst.name) {
+                        highlightedInstrumentFilter = null;
+                        showNotification(`Highlight cleared for ${inst.name}`);
+                    } else {
+                        highlightedInstrumentFilter = { instrument: inst.name };
+                        showNotification(`Highlighted all notes for instrument: ${inst.name}`);
+                    }
+                    renderTimeline();
+                };
+
                 const notesContainer = document.createElement('div');
                 notesContainer.className = 'folder-notes-container';
 
@@ -710,14 +744,16 @@
                     chip.className = 'note-chip';
                     chip.innerText = note;
 
-                    chip.onclick = (e) => {
+                    // DOUBLE-CLICK NOTE CHIP -> Highlights specific note across timeline
+                    chip.ondblclick = (e) => {
                         e.stopPropagation();
+                        highlightedInstrumentFilter = null;
                         if (highlightedNoteFilter && highlightedNoteFilter.instrument === inst.name && highlightedNoteFilter.note === note) {
                             highlightedNoteFilter = null;
                             showNotification("Highlight cleared.");
                         } else {
                             highlightedNoteFilter = { instrument: inst.name, note: note };
-                            showNotification(`Highlighted all ${note} notes for ${inst.name}`);
+                            showNotification(`Highlighted note ${note} for ${inst.name}`);
                         }
                         renderTimeline();
                     };
@@ -731,27 +767,28 @@
             });
         }
 
-        // Render Timeline with Correct Alignment & Dragging
+        // Render Timeline with Correct Ruler Alignment & Micro-Zoom
         function renderTimeline() {
             const viewport = document.getElementById('tracks-viewport');
-            const ruler = document.getElementById('timeline-ruler');
+            const ticksContainer = document.getElementById('ruler-ticks-container');
             viewport.innerHTML = '';
             const playhead = document.getElementById('playhead');
-            ruler.innerHTML = '';
-            ruler.appendChild(playhead);
+            ticksContainer.innerHTML = '';
+            ticksContainer.appendChild(playhead);
 
             const activeProj = getActiveProject();
-            const pxPerSec = 80 * zoomLevel;
+            const pxPerSec = 100 * zoomLevel; // Default 1 sec base zoom
 
-            // Render Ruler ticks starting after the 140px track label offset
-            for (let sec = 0; sec <= 30; sec++) {
+            // Render Ruler ticks inside ticks container (which starts after the 140px spacer)
+            for (let sec = 0; sec <= 60; sec += (zoomLevel > 5 ? 0.1 : 1)) {
                 const marker = document.createElement('div');
                 marker.className = 'ruler-marker';
                 marker.style.left = `${sec * pxPerSec}px`;
                 const mins = String(Math.floor(sec / 60)).padStart(2, '0');
-                const secs = String(sec % 60).padStart(2, '0');
-                marker.innerText = `${mins}:${secs}`;
-                ruler.appendChild(marker);
+                const secs = Math.floor(sec % 60);
+                const millis = Math.round((sec % 1) * 1000);
+                marker.innerText = zoomLevel > 5 ? `+${millis}ms` : `${mins}:${String(secs).padStart(2,'0')}`;
+                ticksContainer.appendChild(marker);
             }
 
             // Render 6 Tracks
@@ -767,12 +804,6 @@
                 const trackArea = document.createElement('div');
                 trackArea.className = 'track-timeline-area';
 
-                trackArea.ondragover = (e) => e.preventDefault();
-                trackArea.ondrop = (e) => {
-                    e.preventDefault();
-                    // Optional drag-drop support from folder if dragged
-                };
-
                 const trackClips = activeProj.clips.filter(c => c.track === trackIdx);
 
                 trackClips.forEach(clip => {
@@ -782,10 +813,14 @@
                         clipEl.classList.add('selected');
                     }
 
-                    const isHighlighted = highlightedNoteFilter && 
-                                          clip.instrument === highlightedNoteFilter.instrument && 
-                                          clip.note === highlightedNoteFilter.note;
-                    if (isHighlighted) {
+                    // Check highlight status
+                    const isNoteHighlighted = highlightedNoteFilter && 
+                                              clip.instrument === highlightedNoteFilter.instrument && 
+                                              clip.note === highlightedNoteFilter.note;
+                    const isInstHighlighted = highlightedInstrumentFilter && 
+                                             clip.instrument === highlightedInstrumentFilter.instrument;
+
+                    if (isNoteHighlighted || isInstHighlighted) {
                         clipEl.classList.add('highlighted');
                     }
 
@@ -794,7 +829,7 @@
                     clipEl.style.backgroundColor = clip.color;
 
                     let baseZ = 10;
-                    if (clip.id === selectedClipId || isHighlighted) {
+                    if (clip.id === selectedClipId || isNoteHighlighted || isInstHighlighted) {
                         baseZ = 200;
                     } else {
                         baseZ = Math.max(1, 50 - Math.round(clip.duration * 10));
@@ -843,7 +878,7 @@
                         showNotification("Note deleted.");
                     };
 
-                    // Resize handle duration slide
+                    // Resize handle duration slide (with 0.001 precision capability)
                     const resizeHandle = clipEl.querySelector('.clip-resize-handle');
                     resizeHandle.onmousedown = (e) => {
                         e.stopPropagation();
@@ -852,7 +887,7 @@
 
                         function onResizeMove(moveEvent) {
                             const dx = moveEvent.clientX - startResizeX;
-                            const newDuration = Math.max(0.2, initialDuration + (dx / pxPerSec));
+                            const newDuration = Math.max(0.001, initialDuration + (dx / pxPerSec));
                             clip.duration = newDuration;
                             clipEl.style.width = `${clip.duration * pxPerSec}px`;
                         }
@@ -893,14 +928,13 @@
         function updateTimeDisplay(timeSec) {
             const mins = String(Math.floor(timeSec / 60)).padStart(2, '0');
             const secs = Math.floor(timeSec % 60);
-            const millis = Math.floor((timeSec % 1) * 100);
-            document.getElementById('header-time-display').innerText = `${mins}:${String(secs).padStart(2,'0')}.${String(millis).padStart(2,'0')}`;
+            const millis = Math.floor((timeSec % 1) * 1000);
+            document.getElementById('header-time-display').innerText = `${mins}:${String(secs).padStart(2,'0')}.${String(millis).padStart(3,'0')}`;
             
-            const pxPerSec = 80 * zoomLevel;
+            const pxPerSec = 100 * zoomLevel;
             const playhead = document.getElementById('playhead');
             if (playhead) {
-                // Offset playhead by 140px to align with the track content area
-                playhead.style.left = `${140 + (timeSec * pxPerSec)}px`;
+                playhead.style.left = `${timeSec * pxPerSec}px`;
             }
         }
 
@@ -1020,7 +1054,7 @@
                     }
                 });
 
-                if (playbackTimeSec > 30) {
+                if (playbackTimeSec > 60) {
                     stopPlayback();
                 }
             }, 30);
@@ -1040,6 +1074,7 @@
                 activeProj.clips = [];
                 selectedClipId = null;
                 highlightedNoteFilter = null;
+                highlightedInstrumentFilter = null;
                 saveAndRefresh();
             }
         }
