@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Open Music Lab - Bottom Timeline Editor</title>
+    <title>Open Music Lab - Timeline Editor</title>
     <style>
         :root {
             --bg-dark: #121214;
@@ -115,7 +115,7 @@
             border-color: var(--accent);
         }
 
-        /* Main Workspace Layout (Sidebar for Projects, Center for Timeline) */
+        /* Main Workspace Layout */
         .workspace-container {
             flex: 1;
             display: flex;
@@ -253,7 +253,7 @@
             width: 90px;
         }
 
-        /* Timeline Container with Strict Separation */
+        /* Timeline Container with Perfect Alignment */
         .timeline-container {
             flex: 1;
             background-color: var(--bg-panel);
@@ -275,6 +275,7 @@
             flex-shrink: 0;
             overflow: hidden;
             user-select: none;
+            padding-left: 140px; /* Exact match to track header width */
         }
 
         .ruler-marker {
@@ -546,7 +547,7 @@
             </div>
 
             <div class="timeline-container">
-                <!-- Ruler / Time markers (strictly docked and non-overlapping) -->
+                <!-- Ruler / Time markers aligned perfectly with track content -->
                 <div class="timeline-ruler" id="timeline-ruler">
                     <div id="playhead"></div>
                 </div>
@@ -557,7 +558,7 @@
                 </div>
             </div>
 
-            <!-- Bottom Instrument Folders Bank (Hover collapsible) -->
+            <!-- Bottom Instrument Folders Bank -->
             <div class="bottom-instrument-bank">
                 <div class="section-title" style="margin-bottom:6px;">Instrument Bank (Hover folder to open, click note to highlight in timeline)</div>
                 <div class="folder-grid-row" id="folder-grid-row">
@@ -599,7 +600,7 @@
         ];
         let currentProjectId = projects[0].id;
         let selectedClipId = null;
-        let highlightedNoteFilter = null; // { instrument, note }
+        let highlightedNoteFilter = null;
         let isPlaying = false;
         let playbackTimeSec = 0;
         let playbackTimer = null;
@@ -670,7 +671,7 @@
             renderTimeline();
         }
 
-        // Render Bottom Hover-Collapsible Instrument Folders & Bank
+        // Render Bottom Folders Bank
         function renderInstrumentFolders() {
             const gridRow = document.getElementById('folder-grid-row');
             gridRow.innerHTML = '';
@@ -686,7 +687,6 @@
                     <span style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${inst.name}</span>
                 `;
 
-                // Clicking header adds a test clip to Track 1
                 header.onclick = () => {
                     const activeProj = getActiveProject();
                     activeProj.clips.push({
@@ -710,11 +710,10 @@
                     chip.className = 'note-chip';
                     chip.innerText = note;
 
-                    // Clicking note in bank HIGHLIGHTS the matching notes in the timeline
                     chip.onclick = (e) => {
                         e.stopPropagation();
                         if (highlightedNoteFilter && highlightedNoteFilter.instrument === inst.name && highlightedNoteFilter.note === note) {
-                            highlightedNoteFilter = null; // toggle off
+                            highlightedNoteFilter = null;
                             showNotification("Highlight cleared.");
                         } else {
                             highlightedNoteFilter = { instrument: inst.name, note: note };
@@ -732,7 +731,7 @@
             });
         }
 
-        // Render Timeline
+        // Render Timeline with Correct Alignment & Dragging
         function renderTimeline() {
             const viewport = document.getElementById('tracks-viewport');
             const ruler = document.getElementById('timeline-ruler');
@@ -744,7 +743,7 @@
             const activeProj = getActiveProject();
             const pxPerSec = 80 * zoomLevel;
 
-            // Render Ruler ticks
+            // Render Ruler ticks starting after the 140px track label offset
             for (let sec = 0; sec <= 30; sec++) {
                 const marker = document.createElement('div');
                 marker.className = 'ruler-marker';
@@ -768,6 +767,12 @@
                 const trackArea = document.createElement('div');
                 trackArea.className = 'track-timeline-area';
 
+                trackArea.ondragover = (e) => e.preventDefault();
+                trackArea.ondrop = (e) => {
+                    e.preventDefault();
+                    // Optional drag-drop support from folder if dragged
+                };
+
                 const trackClips = activeProj.clips.filter(c => c.track === trackIdx);
 
                 trackClips.forEach(clip => {
@@ -777,7 +782,6 @@
                         clipEl.classList.add('selected');
                     }
 
-                    // Check if matching highlight filter from bank
                     const isHighlighted = highlightedNoteFilter && 
                                           clip.instrument === highlightedNoteFilter.instrument && 
                                           clip.note === highlightedNoteFilter.note;
@@ -789,7 +793,6 @@
                     clipEl.style.width = `${clip.duration * pxPerSec}px`;
                     clipEl.style.backgroundColor = clip.color;
 
-                    // Z-Index layering: Selected or highlighted clips come forward; shorter clips sit above longer clips
                     let baseZ = 10;
                     if (clip.id === selectedClipId || isHighlighted) {
                         baseZ = 200;
@@ -803,35 +806,35 @@
                         <div class="clip-resize-handle" title="Drag edge to resize duration"></div>
                     `;
 
-                    // Click to select and bring forward
+                    // Smooth Dragging Logic
                     clipEl.onmousedown = (e) => {
                         if (e.target.classList.contains('clip-resize-handle')) return;
                         selectedClipId = clip.id;
                         playTone(clip.instrument, clip.note, clip.duration, activeProj.bpm || 120);
                         renderTimeline();
 
-                        let isDraggingClip = true;
-                        let startX = e.clientX;
-                        let initialStart = clip.start;
+                        const startX = e.clientX;
+                        const initialStart = clip.start;
                         e.stopPropagation();
 
-                        document.onmousemove = (moveEvent) => {
-                            if (!isDraggingClip) return;
+                        function onMouseMove(moveEvent) {
                             const dx = moveEvent.clientX - startX;
                             const newStart = Math.max(0, initialStart + (dx / pxPerSec));
                             clip.start = newStart;
                             clipEl.style.left = `${clip.start * pxPerSec}px`;
-                        };
+                        }
 
-                        document.onmouseup = () => {
-                            isDraggingClip = false;
-                            document.onmousemove = null;
-                            document.onmouseup = null;
+                        function onMouseUp() {
+                            window.removeEventListener('mousemove', onMouseMove);
+                            window.removeEventListener('mouseup', onMouseUp);
                             saveAndRefresh();
-                        };
+                        }
+
+                        window.addEventListener('mousemove', onMouseMove);
+                        window.addEventListener('mouseup', onMouseUp);
                     };
 
-                    // Double click / double tap to delete note
+                    // Double click to delete
                     clipEl.ondblclick = (e) => {
                         e.stopPropagation();
                         activeProj.clips = activeProj.clips.filter(c => c.id !== clip.id);
@@ -840,25 +843,28 @@
                         showNotification("Note deleted.");
                     };
 
-                    // Resize handle
+                    // Resize handle duration slide
                     const resizeHandle = clipEl.querySelector('.clip-resize-handle');
                     resizeHandle.onmousedown = (e) => {
                         e.stopPropagation();
-                        let startResizeX = e.clientX;
-                        let initialDuration = clip.duration;
+                        const startResizeX = e.clientX;
+                        const initialDuration = clip.duration;
 
-                        document.onmousemove = (moveEvent) => {
+                        function onResizeMove(moveEvent) {
                             const dx = moveEvent.clientX - startResizeX;
                             const newDuration = Math.max(0.2, initialDuration + (dx / pxPerSec));
                             clip.duration = newDuration;
                             clipEl.style.width = `${clip.duration * pxPerSec}px`;
-                        };
+                        }
 
-                        document.onmouseup = () => {
-                            document.onmousemove = null;
-                            document.onmouseup = null;
+                        function onResizeUp() {
+                            window.removeEventListener('mousemove', onResizeMove);
+                            window.removeEventListener('mouseup', onResizeUp);
                             saveAndRefresh();
-                        };
+                        }
+
+                        window.addEventListener('mousemove', onResizeMove);
+                        window.addEventListener('mouseup', onResizeUp);
                     };
 
                     trackArea.appendChild(clipEl);
@@ -893,7 +899,8 @@
             const pxPerSec = 80 * zoomLevel;
             const playhead = document.getElementById('playhead');
             if (playhead) {
-                playhead.style.left = `${timeSec * pxPerSec}px`;
+                // Offset playhead by 140px to align with the track content area
+                playhead.style.left = `${140 + (timeSec * pxPerSec)}px`;
             }
         }
 
