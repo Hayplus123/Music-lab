@@ -277,7 +277,7 @@
             user-select: none;
         }
 
-        /* Fixed 140px spacer so 00:00 starts right after track labels */
+        /* Fixed 140px spacer so 00:00 starts after track headers */
         .ruler-spacer {
             width: 140px;
             min-width: 140px;
@@ -364,7 +364,11 @@
             position: relative;
             background-image: linear-gradient(to right, rgba(255,255,255,0.03) 1px, transparent 1px);
             background-size: 40px 100%;
-            cursor: crosshair;
+            transition: background-color 0.2s;
+        }
+
+        .track-timeline-area.drag-over {
+            background-color: rgba(99, 102, 241, 0.15);
         }
 
         /* Timeline Clips */
@@ -503,8 +507,13 @@
             padding: 3px 6px;
             border-radius: 4px;
             font-size: 0.7rem;
-            cursor: pointer;
+            cursor: grab;
             transition: all 0.1s;
+            user-select: none;
+        }
+
+        .note-chip:active {
+            cursor: grabbing;
         }
 
         .note-chip:hover {
@@ -576,7 +585,7 @@
 
             <!-- Bottom Instrument Folders Bank -->
             <div class="bottom-instrument-bank">
-                <div class="section-title" style="margin-bottom:6px;">Instrument Bank (Click note to drag into track, Double-click to highlight)</div>
+                <div class="section-title" style="margin-bottom:6px;">Instrument Bank (DRAG note directly to track | Double-click to highlight)</div>
                 <div class="folder-grid-row" id="folder-grid-row"></div>
             </div>
         </div>
@@ -706,22 +715,6 @@
                     <span style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${inst.name}</span>
                 `;
 
-                header.onclick = (e) => {
-                    e.stopPropagation();
-                    const activeProj = getActiveProject();
-                    activeProj.clips.push({
-                        id: Date.now() + Math.random(),
-                        instrument: inst.name,
-                        note: inst.notes[0],
-                        color: inst.color,
-                        track: 0,
-                        start: 1.0,
-                        duration: 1.5
-                    });
-                    saveAndRefresh();
-                    showNotification(`Added ${inst.name} (${inst.notes[0]}) to Track 1`);
-                };
-
                 header.ondblclick = (e) => {
                     e.stopPropagation();
                     highlightedNoteFilter = null;
@@ -740,21 +733,15 @@
                     const chip = document.createElement('div');
                     chip.className = 'note-chip';
                     chip.innerText = note;
+                    chip.setAttribute('draggable', 'true');
 
-                    chip.onclick = (e) => {
-                        e.stopPropagation();
-                        const activeProj = getActiveProject();
-                        activeProj.clips.push({
-                            id: Date.now() + Math.random(),
+                    // DRAG START from Folder Bank
+                    chip.ondragstart = (e) => {
+                        e.dataTransfer.setData('text/plain', JSON.stringify({
                             instrument: inst.name,
                             note: note,
-                            color: inst.color,
-                            track: 0,
-                            start: 1.0,
-                            duration: 1.5
-                        });
-                        saveAndRefresh();
-                        showNotification(`Added ${note} (${inst.name})`);
+                            color: inst.color
+                        }));
                     };
 
                     chip.ondblclick = (e) => {
@@ -811,21 +798,34 @@
                 const trackArea = document.createElement('div');
                 trackArea.className = 'track-timeline-area';
 
-                // Click or Drag directly on empty track space to place a clip
-                trackArea.onmousedown = (e) => {
-                    if (e.target !== trackArea) return;
-                    e.stopPropagation();
+                // DRAG OVER / DROP LOGIC for Track Timeline
+                trackArea.ondragover = (e) => {
+                    e.preventDefault();
+                    trackArea.classList.add('drag-over');
+                };
+
+                trackArea.ondragleave = () => {
+                    trackArea.classList.remove('drag-over');
+                };
+
+                trackArea.ondrop = (e) => {
+                    e.preventDefault();
+                    trackArea.classList.remove('drag-over');
+                    const rawData = e.dataTransfer.getData('text/plain');
+                    if (!rawData) return;
+
+                    const data = JSON.parse(rawData);
                     const rect = trackArea.getBoundingClientRect();
-                    const clickX = e.clientX - rect.left;
-                    const startTime = Math.max(0, clickX / pxPerSec);
+                    const dropX = e.clientX - rect.left;
+                    const dropStart = Math.max(0, dropX / pxPerSec);
 
                     const newClip = {
                         id: Date.now() + Math.random(),
-                        instrument: 'Acoustic Grand Piano',
-                        note: 'C4',
-                        color: '#3b82f6',
+                        instrument: data.instrument,
+                        note: data.note,
+                        color: data.color,
                         track: trackIdx,
-                        start: startTime,
+                        start: dropStart,
                         duration: 1.5
                     };
 
@@ -833,6 +833,7 @@
                     selectedClipId = newClip.id;
                     playTone(newClip.instrument, newClip.note, newClip.duration, activeProj.bpm || 120);
                     saveAndRefresh();
+                    showNotification(`Dropped ${data.note} (${data.instrument}) on Track ${trackIdx + 1}`);
                 };
 
                 const trackClips = activeProj.clips.filter(c => c.track === trackIdx);
@@ -856,7 +857,7 @@
                         <div class="clip-resize-handle" title="Drag edge to resize duration"></div>
                     `;
 
-                    // DRAG NOTE ALONG TIMELINE & ACROSS TRACKS
+                    // DRAG EXISTING NOTE CLIP ALONG TIMELINE & TRACKS
                     clipEl.onmousedown = (e) => {
                         if (e.target.classList.contains('clip-resize-handle')) return;
                         e.stopPropagation();
