@@ -538,7 +538,7 @@
         ];
 
         let activeInstrumentName = instruments[0].name;
-        let highlightedInstrumentName = null; // Only set by double-clicking an instrument
+        let highlightedInstrumentName = null;
 
         // Master Pitch Rows
         const masterPitchRows = [
@@ -559,8 +559,6 @@
         function playTone(instrumentName, noteName, durationSteps = 1, bpm = 120) {
             initAudio();
             const now = audioCtx.currentTime;
-            // x1, x2 and x4 mean 1, 2 and 4 full beats.
-            // This changes note length only; it does not add timeline steps.
             const stepDurationSec = (60 / bpm) * durationSteps;
             const gainNode = audioCtx.createGain();
             gainNode.connect(audioCtx.destination);
@@ -675,6 +673,20 @@
             document.body.style.cursor = 'default';
         });
 
+        // Click away deselects instrument and clears highlights
+        window.addEventListener('click', (e) => {
+            if (!e.target.closest('.palette-item') && !e.target.closest('.instrument-search') && !e.target.closest('.step-box')) {
+                activeInstrumentName = null;
+                highlightedInstrumentName = null;
+                document.getElementById('available-notes-panel').innerHTML = `
+                    <strong>Available notes:</strong>
+                    <span>Double-click an instrument to see its notes and highlight them on the board.</span>
+                `;
+                renderInstrumentGrid(instruments);
+                renderMasterGrid();
+            }
+        });
+
         // State Management
         let projects = JSON.parse(localStorage.getItem('music_lab_projects')) || [
             { id: 1, name: 'My First Beat', notesData: {}, totalSteps: 32 }
@@ -701,20 +713,6 @@
             if (!proj.notesData) proj.notesData = {};
             if (!proj.totalSteps) proj.totalSteps = 32;
             return proj;
-        }
-
-        function getActiveInstrumentsOnBoard() {
-            const activeProj = getActiveProject();
-            const usedInstruments = new Set();
-            Object.keys(activeProj.notesData).forEach(step => {
-                const stepNotes = activeProj.notesData[step];
-                Object.keys(stepNotes).forEach(note => {
-                    if (stepNotes[note] && stepNotes[note].instrument) {
-                        usedInstruments.add(stepNotes[note].instrument);
-                    }
-                });
-            });
-            return usedInstruments;
         }
 
         function syncStepsInput() {
@@ -764,8 +762,8 @@
 
             items.forEach(inst => {
                 const item = document.createElement('div');
-                // Selecting an instrument with one click does not visually highlight it.
                 item.className = 'palette-item';
+                if (activeInstrumentName === inst.name) item.classList.add('active');
 
                 item.innerHTML = `
                     <div class="color-dot" style="background-color: ${inst.color};"></div>
@@ -780,7 +778,6 @@
                     activeInstrumentName = inst.name;
                 };
 
-                // Double-click selects the instrument and highlights its playable note rows.
                 item.ondblclick = (e) => {
                     e.stopPropagation();
                     activeInstrumentName = inst.name;
@@ -886,16 +883,22 @@
                         stepBox.style.backgroundColor = instObj.color;
                         stepBox.style.borderColor = instObj.color;
                         stepBox.innerHTML = `<span>${note}</span><span style="font-size:0.45rem; opacity:0.8;">${cellData.duration}x</span>`;
-                        stepBox.title = `Instrument: ${instObj.name} (${instObj.category})\\nDuration: ${cellData.duration} beat(s)`;
+                        stepBox.title = `Instrument:\n${instObj.name} (${instObj.category})`;
                     }
 
                     if (isPlaying && currentStep === s) {
                         stepBox.classList.add('playing-head');
                     }
 
-                    // Single Click Validation
+                    // Single Click Validation & Note Placement
                     stepBox.onclick = (e) => {
                         e.stopPropagation();
+
+                        if (!activeInstrumentName) {
+                            showNotification("Please select an instrument from the palette below first!");
+                            return;
+                        }
+
                         const instObj = instruments.find(i => i.name === activeInstrumentName);
 
                         if (!instObj || !instObj.notes || instObj.notes.length === 0) {
@@ -976,7 +979,7 @@
         function startPlaybackTimer() {
             const activeProj = getActiveProject();
             const totalSteps = activeProj ? (activeProj.totalSteps || 32) : 32;
-            const intervalMs = 15000 / currentBpm;
+            const intervalMs = (60 / currentBpm) * 1000;
 
             playbackTimer = setInterval(() => {
                 playCurrentStep();
