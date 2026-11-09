@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Open Music Lab - Timeline Editor</title>
+    <title>Open Music Lab - Bottom Timeline Editor</title>
     <style>
         :root {
             --bg-dark: #121214;
@@ -57,7 +57,7 @@
             transform: translateX(-50%) translateY(0);
         }
 
-        /* Top Header with Time Display */
+        /* Top Header */
         header {
             height: 50px;
             background-color: var(--bg-panel);
@@ -115,16 +115,15 @@
             border-color: var(--accent);
         }
 
-        /* Workspace Layout */
+        /* Main Workspace Layout (Sidebar for Projects, Center for Timeline) */
         .workspace-container {
             flex: 1;
             display: flex;
             overflow: hidden;
         }
 
-        /* Left Sidebar: Projects & Hover Collapsible Folders */
         sidebar {
-            width: 280px;
+            width: 250px;
             background-color: var(--bg-panel);
             border-right: 1px solid var(--border);
             display: flex;
@@ -180,7 +179,6 @@
 
         .project-list {
             list-style: none;
-            margin-bottom: 20px;
         }
 
         .project-item {
@@ -197,65 +195,6 @@
             border-color: var(--accent);
         }
 
-        /* Hover Collapsible Folders */
-        .folder-list {
-            display: flex;
-            flex-direction: column;
-            gap: 6px;
-        }
-
-        .folder-item {
-            background-color: var(--bg-card);
-            border: 1px solid var(--border);
-            border-radius: 6px;
-            overflow: hidden;
-            transition: border-color 0.2s;
-        }
-
-        .folder-header {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            padding: 8px 10px;
-            cursor: pointer;
-            font-size: 0.85rem;
-            font-weight: 500;
-        }
-
-        .folder-header:hover {
-            border-color: var(--accent);
-            background-color: rgba(99, 102, 241, 0.1);
-        }
-
-        .folder-content {
-            display: none;
-            padding: 8px;
-            background-color: rgba(0,0,0,0.2);
-            border-top: 1px solid var(--border);
-            flex-wrap: wrap;
-            gap: 4px;
-        }
-
-        /* Opens on hover */
-        .folder-item:hover .folder-content {
-            display: flex;
-        }
-
-        .note-chip {
-            background-color: var(--bg-panel);
-            border: 1px solid var(--border);
-            padding: 4px 8px;
-            border-radius: 4px;
-            font-size: 0.75rem;
-            cursor: grab;
-            transition: all 0.1s;
-        }
-
-        .note-chip:hover {
-            border-color: var(--accent);
-            background-color: rgba(99, 102, 241, 0.2);
-        }
-
         /* Center Content Area */
         .center-workspace {
             flex: 1;
@@ -264,13 +203,13 @@
             background-color: var(--bg-dark);
             overflow: hidden;
             padding: 15px;
+            gap: 15px;
         }
 
         .timeline-toolbar {
             display: flex;
             gap: 12px;
             align-items: center;
-            margin-bottom: 12px;
             justify-content: space-between;
             flex-shrink: 0;
         }
@@ -314,7 +253,7 @@
             width: 90px;
         }
 
-        /* Timeline Container with Strict Separation from Ruler */
+        /* Timeline Container with Strict Separation */
         .timeline-container {
             flex: 1;
             background-color: var(--bg-panel);
@@ -332,9 +271,8 @@
             background-color: var(--bg-card);
             border-bottom: 1px solid var(--border);
             display: flex;
-            position: sticky;
-            top: 0;
-            z-index: 50;
+            position: relative;
+            flex-shrink: 0;
             overflow: hidden;
             user-select: none;
         }
@@ -346,7 +284,7 @@
             border-left: 1px solid var(--border);
             height: 100%;
             padding-left: 3px;
-            padding-top: 8px;
+            padding-top: 10px;
         }
 
         /* Playhead Indicator */
@@ -388,8 +326,8 @@
         }
 
         .track-header-label {
-            width: 150px;
-            min-width: 150px;
+            width: 140px;
+            min-width: 140px;
             padding: 0 12px;
             font-size: 0.75rem;
             font-weight: 600;
@@ -401,7 +339,6 @@
             border-right: 1px solid var(--border);
             display: flex;
             align-items: center;
-            gap: 8px;
             height: 100%;
         }
 
@@ -427,7 +364,7 @@
             cursor: grab;
             user-select: none;
             box-shadow: 0 2px 6px rgba(0,0,0,0.3);
-            transition: border-color 0.1s;
+            transition: border-color 0.1s, box-shadow 0.1s;
         }
 
         .timeline-clip:active {
@@ -436,7 +373,18 @@
 
         .timeline-clip.selected {
             border-color: #fff;
-            box-shadow: 0 0 12px rgba(99, 102, 241, 0.8);
+            box-shadow: 0 0 12px rgba(99, 102, 241, 0.9);
+        }
+
+        .timeline-clip.highlighted {
+            border-color: #38bdf8;
+            box-shadow: 0 0 15px #38bdf8;
+            animation: pulse 1s infinite alternate;
+        }
+
+        @keyframes pulse {
+            0% { transform: scale(1); }
+            100% { transform: scale(1.02); }
         }
 
         .clip-label {
@@ -464,6 +412,89 @@
         .clip-resize-handle:hover {
             background-color: rgba(255,255,255,0.5);
         }
+
+        /* Bottom Instrument Bank / Folders Panel */
+        .bottom-instrument-bank {
+            height: 150px;
+            min-height: 130px;
+            background-color: var(--bg-panel);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 12px;
+            display: flex;
+            flex-direction: column;
+            flex-shrink: 0;
+            overflow: hidden;
+        }
+
+        .folder-grid-row {
+            display: flex;
+            gap: 10px;
+            overflow-x: auto;
+            flex: 1;
+            align-items: center;
+            padding-bottom: 5px;
+        }
+
+        /* Hover-Collapsible Folders */
+        .folder-card {
+            background-color: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            min-width: 160px;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            padding: 8px;
+            position: relative;
+            transition: all 0.2s;
+            cursor: pointer;
+            overflow: hidden;
+        }
+
+        .folder-card:hover {
+            border-color: var(--accent);
+            min-width: 280px;
+            background-color: rgba(26, 26, 30, 0.95);
+            z-index: 50;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+        }
+
+        .folder-card-header {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 0.8rem;
+            font-weight: 600;
+            margin-bottom: 6px;
+        }
+
+        .folder-notes-container {
+            display: none;
+            flex-wrap: wrap;
+            gap: 4px;
+            overflow-y: auto;
+            flex: 1;
+        }
+
+        .folder-card:hover .folder-notes-container {
+            display: flex;
+        }
+
+        .note-chip {
+            background-color: var(--bg-panel);
+            border: 1px solid var(--border);
+            padding: 3px 6px;
+            border-radius: 4px;
+            font-size: 0.7rem;
+            cursor: pointer;
+            transition: all 0.1s;
+        }
+
+        .note-chip:hover {
+            border-color: #38bdf8;
+            background-color: rgba(56, 189, 248, 0.2);
+        }
     </style>
 </head>
 <body>
@@ -484,7 +515,7 @@
     </header>
 
     <div class="workspace-container">
-        <!-- Sidebar: Projects & Hover Folders -->
+        <!-- Sidebar: Projects -->
         <sidebar>
             <div class="section-title">Projects</div>
             <div class="btn-group">
@@ -492,15 +523,9 @@
                 <button class="btn btn-danger" onclick="deleteCurrentProject()">🗑 Delete</button>
             </div>
             <ul id="project-list" class="project-list"></ul>
-
-            <div class="section-title">Instruments</div>
-            <div style="font-size:0.75rem; color:var(--text-muted); margin-bottom:8px;">Hover to open folder, click folder header to place notes, or drag notes onto tracks.</div>
-            <div class="folder-list" id="folder-list">
-                <!-- Populated via JS -->
-            </div>
         </sidebar>
 
-        <!-- Center Workspace -->
+        <!-- Center Workspace: Timeline & Bottom Folders -->
         <div class="center-workspace">
             <div class="timeline-toolbar">
                 <div class="toolbar-group">
@@ -521,7 +546,7 @@
             </div>
 
             <div class="timeline-container">
-                <!-- Ruler / Time markers (strictly separated) -->
+                <!-- Ruler / Time markers (strictly docked and non-overlapping) -->
                 <div class="timeline-ruler" id="timeline-ruler">
                     <div id="playhead"></div>
                 </div>
@@ -529,6 +554,14 @@
                 <!-- Tracks Viewport -->
                 <div class="tracks-viewport" id="tracks-viewport">
                     <!-- Dynamic Tracks rendered here -->
+                </div>
+            </div>
+
+            <!-- Bottom Instrument Folders Bank (Hover collapsible) -->
+            <div class="bottom-instrument-bank">
+                <div class="section-title" style="margin-bottom:6px;">Instrument Bank (Hover folder to open, click note to highlight in timeline)</div>
+                <div class="folder-grid-row" id="folder-grid-row">
+                    <!-- Populated via JS -->
                 </div>
             </div>
         </div>
@@ -546,7 +579,7 @@
             }
         }
 
-        // Instrument Definitions with Folders & Notes
+        // Instrument Definitions
         const instruments = [
             { name: 'Acoustic Grand Piano', category: 'Keys', color: '#3b82f6', notes: ['C5', 'B4', 'A4', 'G4', 'F4', 'E4', 'D4', 'C4', 'B3', 'A3', 'G3', 'F3', 'E3', 'D3', 'C3'] },
             { name: 'Electric Piano', category: 'Keys', color: '#2563eb', notes: ['C5', 'B4', 'A4', 'G4', 'F4', 'E4', 'D4', 'C4', 'B3', 'A3', 'G3', 'F3', 'E3'] },
@@ -566,6 +599,7 @@
         ];
         let currentProjectId = projects[0].id;
         let selectedClipId = null;
+        let highlightedNoteFilter = null; // { instrument, note }
         let isPlaying = false;
         let playbackTimeSec = 0;
         let playbackTimer = null;
@@ -631,73 +665,70 @@
             if (isPlaying) stopPlayback();
             currentProjectId = id;
             selectedClipId = null;
+            highlightedNoteFilter = null;
             renderProjects();
             renderTimeline();
         }
 
-        // Render Instrument Folders (Hover-collapsible)
+        // Render Bottom Hover-Collapsible Instrument Folders & Bank
         function renderInstrumentFolders() {
-            const list = document.getElementById('folder-list');
-            list.innerHTML = '';
+            const gridRow = document.getElementById('folder-grid-row');
+            gridRow.innerHTML = '';
 
             instruments.forEach(inst => {
-                const folderDiv = document.createElement('div');
-                folderDiv.className = 'folder-item';
+                const card = document.createElement('div');
+                card.className = 'folder-card';
 
                 const header = document.createElement('div');
-                header.className = 'folder-header';
+                header.className = 'folder-card-header';
                 header.innerHTML = `
-                    <div style="display:flex; align-items:center; gap:6px;">
-                        <div style="width:10px; height:10px; border-radius:50%; background:${inst.color}"></div>
-                        <span>${inst.name}</span>
-                    </div>
-                    <span style="font-size:0.7rem; color:var(--text-muted);">${inst.notes.length} notes</span>
+                    <div style="width:10px; height:10px; border-radius:50%; background:${inst.color}"></div>
+                    <span style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${inst.name}</span>
                 `;
 
-                // Clicking the folder places all its notes sequentially on Track 1
+                // Clicking header adds a test clip to Track 1
                 header.onclick = () => {
                     const activeProj = getActiveProject();
-                    let currentTime = 0;
-                    inst.notes.forEach((note, idx) => {
-                        activeProj.clips.push({
-                            id: Date.now() + Math.random() + idx,
-                            instrument: inst.name,
-                            note: note,
-                            color: inst.color,
-                            track: 0, // Track 1
-                            start: currentTime,
-                            duration: 1.0
-                        });
-                        currentTime += 1.0;
+                    activeProj.clips.push({
+                        id: Date.now() + Math.random(),
+                        instrument: inst.name,
+                        note: inst.notes[0],
+                        color: inst.color,
+                        track: 0,
+                        start: 1.0,
+                        duration: 1.5
                     });
                     saveAndRefresh();
-                    showNotification(`Placed all notes for ${inst.name} onto Track 1!`);
+                    showNotification(`Added ${inst.name} (${inst.notes[0]}) to Track 1`);
                 };
 
-                const content = document.createElement('div');
-                content.className = 'folder-content';
+                const notesContainer = document.createElement('div');
+                notesContainer.className = 'folder-notes-container';
 
                 inst.notes.forEach(note => {
                     const chip = document.createElement('div');
                     chip.className = 'note-chip';
                     chip.innerText = note;
-                    chip.draggable = true;
-                    chip.style.borderColor = inst.color;
 
-                    chip.ondragstart = (e) => {
-                        e.dataTransfer.setData('text/plain', JSON.stringify({
-                            instrument: inst.name,
-                            note: note,
-                            color: inst.color
-                        }));
+                    // Clicking note in bank HIGHLIGHTS the matching notes in the timeline
+                    chip.onclick = (e) => {
+                        e.stopPropagation();
+                        if (highlightedNoteFilter && highlightedNoteFilter.instrument === inst.name && highlightedNoteFilter.note === note) {
+                            highlightedNoteFilter = null; // toggle off
+                            showNotification("Highlight cleared.");
+                        } else {
+                            highlightedNoteFilter = { instrument: inst.name, note: note };
+                            showNotification(`Highlighted all ${note} notes for ${inst.name}`);
+                        }
+                        renderTimeline();
                     };
 
-                    content.appendChild(chip);
+                    notesContainer.appendChild(chip);
                 });
 
-                folderDiv.appendChild(header);
-                folderDiv.appendChild(content);
-                list.appendChild(folderDiv);
+                card.appendChild(header);
+                card.appendChild(notesContainer);
+                gridRow.appendChild(card);
             });
         }
 
@@ -737,54 +768,32 @@
                 const trackArea = document.createElement('div');
                 trackArea.className = 'track-timeline-area';
 
-                trackArea.ondragover = (e) => e.preventDefault();
-                trackArea.ondrop = (e) => {
-                    e.preventDefault();
-                    const rawData = e.dataTransfer.getData('text/plain');
-                    if (!rawData) return;
-                    const data = JSON.parse(rawData);
-
-                    const rect = trackArea.getBoundingClientRect();
-                    const dropX = e.clientX - rect.left + viewport.scrollLeft;
-                    const startTime = Math.max(0, dropX / pxPerSec);
-
-                    const newClip = {
-                        id: Date.now() + Math.random(),
-                        instrument: data.instrument,
-                        note: data.note,
-                        color: data.color,
-                        track: trackIdx,
-                        start: startTime,
-                        duration: 1.5
-                    };
-
-                    activeProj.clips.push(newClip);
-                    selectedClipId = newClip.id;
-                    saveAndRefresh();
-                    showNotification(`Added ${data.note} (${data.instrument})`);
-                };
-
                 const trackClips = activeProj.clips.filter(c => c.track === trackIdx);
 
-                // Sort clips by duration descending so longer clips are evaluated first for layering z-index
-                // Rule: If length of note is bigger than the one in front of it, bring smaller ones forward (higher z-index)
-                trackClips.forEach((clip, index, arr) => {
+                trackClips.forEach(clip => {
                     const clipEl = document.createElement('div');
                     clipEl.className = 'timeline-clip';
                     if (clip.id === selectedClipId) {
                         clipEl.classList.add('selected');
                     }
 
+                    // Check if matching highlight filter from bank
+                    const isHighlighted = highlightedNoteFilter && 
+                                          clip.instrument === highlightedNoteFilter.instrument && 
+                                          clip.note === highlightedNoteFilter.note;
+                    if (isHighlighted) {
+                        clipEl.classList.add('highlighted');
+                    }
+
                     clipEl.style.left = `${clip.start * pxPerSec}px`;
                     clipEl.style.width = `${clip.duration * pxPerSec}px`;
                     clipEl.style.backgroundColor = clip.color;
 
-                    // Dynamic z-index layering: selected = 100, smaller duration notes get higher z-index than larger overlapping notes
+                    // Z-Index layering: Selected or highlighted clips come forward; shorter clips sit above longer clips
                     let baseZ = 10;
-                    if (clip.id === selectedClipId) {
-                        baseZ = 100; // bring forward when clicked/selected
+                    if (clip.id === selectedClipId || isHighlighted) {
+                        baseZ = 200;
                     } else {
-                        // Invert z-index based on duration so shorter notes sit on top of longer notes
                         baseZ = Math.max(1, 50 - Math.round(clip.duration * 10));
                     }
                     clipEl.style.zIndex = baseZ;
@@ -794,12 +803,12 @@
                         <div class="clip-resize-handle" title="Drag edge to resize duration"></div>
                     `;
 
-                    // Click to select / bring forward
+                    // Click to select and bring forward
                     clipEl.onmousedown = (e) => {
                         if (e.target.classList.contains('clip-resize-handle')) return;
                         selectedClipId = clip.id;
                         playTone(clip.instrument, clip.note, clip.duration, activeProj.bpm || 120);
-                        renderTimeline(); // re-render to update z-index and selection
+                        renderTimeline();
 
                         let isDraggingClip = true;
                         let startX = e.clientX;
@@ -822,7 +831,7 @@
                         };
                     };
 
-                    // Double tap / double click to delete note instantly
+                    // Double click / double tap to delete note
                     clipEl.ondblclick = (e) => {
                         e.stopPropagation();
                         activeProj.clips = activeProj.clips.filter(c => c.id !== clip.id);
@@ -831,7 +840,7 @@
                         showNotification("Note deleted.");
                     };
 
-                    // Resize handle duration slide
+                    // Resize handle
                     const resizeHandle = clipEl.querySelector('.clip-resize-handle');
                     resizeHandle.onmousedown = (e) => {
                         e.stopPropagation();
@@ -1023,6 +1032,7 @@
                 const activeProj = getActiveProject();
                 activeProj.clips = [];
                 selectedClipId = null;
+                highlightedNoteFilter = null;
                 saveAndRefresh();
             }
         }
