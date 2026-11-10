@@ -1015,50 +1015,50 @@
             }
         }
 
-        // --- Real Soundfont & Percussion Engine (Case-Sensitive Fixed) ---
-        async function playTone(soundfontKey, noteName, instrumentName) {
-            initAudio();
-            const cacheKey = `${soundfontKey}_${noteName}`;
+// --- Direct Open-Source MP3 Sample Engine ---
+async function playTone(soundfontKey, noteName, instrumentName) {
+    initAudio();
+    const cacheKey = `${soundfontKey}_${noteName}`;
 
-            if (soundBufferCache[cacheKey]) {
-                playBuffer(soundBufferCache[cacheKey]);
-                return;
-            }
+    if (soundBufferCache[cacheKey]) {
+        playBuffer(soundBufferCache[cacheKey]);
+        return;
+    }
 
-            // Handle Percussion Drums
-            if (soundfontKey.startsWith('drum_')) {
-                playDrumSound(soundfontKey);
-                return;
-            }
+    // Handle Percussion Drums
+    if (soundfontKey.startsWith('drum_')) {
+        playDrumSound(soundfontKey);
+        return;
+    }
 
-            showNotification(`🌐 Fetching real recording for ${noteName} (${instrumentName})...`);
+    showNotification(`🌐 Fetching real ${instrumentName} (${noteName})...`);
 
-            try {
-                // FIXED: Retain exact uppercase noteName (e.g. A4) matching GitHub case-sensitivity
-                const url = `https://cdn.jsdelivr.net/gh/gleitz/midi-js-soundfonts@master/FluidR3_GM/${soundfontKey}-${noteName}.js`;
-                
-                const response = await fetch(url);
-                if (!response.ok) throw new Error("Soundfont asset unavailable");
-                const text = await response.text();
+    try {
+        // Direct MP3 URL mapping from open-source audio CDN
+        let folderName = 'piano';
+        if (soundfontKey.includes('flute')) folderName = 'flute';
+        else if (soundfontKey.includes('trumpet')) folderName = 'trumpet';
+        else if (soundfontKey.includes('violin')) folderName = 'violin';
+        else if (soundfontKey.includes('guitar')) folderName = 'guitar-acoustic';
+        else if (soundfontKey.includes('bass')) folderName = 'bass-electric';
 
-                // Extract base64 audio data URI from the soundfont JS file
-                const base64Match = text.match(/["']data:audio\/mp3;base64,[^"']+["']/);
-                if (!base64Match) throw new Error("Invalid soundfont data format");
+        const url = `https://cdn.jsdelivr.net/gh/nbrosowsky/tonejs-instruments@master/samples/${folderName}/${noteName}.mp3`;
+        
+        const response = await fetch(url);
+        if (!response.ok) throw new Error("Sample unavailable");
+        
+        const arrayBuffer = await response.arrayBuffer();
+        const audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
 
-                const dataUri = base64Match[0].slice(1, -1);
-                const audioRes = await fetch(dataUri);
-                const arrayBuffer = await audioRes.arrayBuffer();
-                const audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
+        soundBufferCache[cacheKey] = audioBuffer;
+        showNotification(`✨ Loaded real ${instrumentName} (${noteName})!`);
+        playBuffer(audioBuffer);
 
-                soundBufferCache[cacheKey] = audioBuffer;
-                showNotification(`✨ Loaded real recording for ${noteName} (${instrumentName})!`);
-                playBuffer(audioBuffer);
-
-            } catch (error) {
-                showNotification(`⚠️ Could not fetch sample, using synth backup.`);
-                playSynthFallback(noteName);
-            }
-        }
+    } catch (error) {
+        showNotification(`⚠️ Could not fetch MP3 sample, using synth backup.`);
+        playSynthFallback(noteName);
+    }
+}
 
         function playBuffer(audioBuffer) {
             const now = audioCtx.currentTime;
