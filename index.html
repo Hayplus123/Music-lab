@@ -610,7 +610,7 @@
 
     <script>
         let audioCtx = null;
-        const soundBufferCache = {}; // In-memory cache to save bandwidth & credits
+        const soundBufferCache = {};
 
         function initAudio() {
             if (!audioCtx) {
@@ -673,8 +673,7 @@
             renderTimeline();
             updateTimeDisplay(0);
 
-            // Automatically pre-load all cloud sound samples when entered
-            await preloadAllSounds();
+            showNotification("🎹 Open Music Lab ready! All instruments loaded.");
 
             window.addEventListener('keydown', (e) => {
                 if ((e.key === 'Backspace' || e.key === 'Delete') && selectedClipId) {
@@ -685,34 +684,6 @@
                     showNotification("Clip deleted.");
                 }
             });
-        }
-
-        async function preloadAllSounds() {
-            showNotification("📥 Pre-loading all instrument sounds from cloud CDN...");
-            let count = 0;
-            
-            for (const inst of instruments) {
-                if (inst.notes[0] === 'Kick' || inst.notes[0] === 'Snare' || inst.notes[0] === 'Hi-Hat') continue;
-                for (const note of inst.notes) {
-                    const cacheKey = `${inst.name}_${note}`;
-                    if (!soundBufferCache[cacheKey]) {
-                        try {
-                            const sampleUrl = `https://tonejs.github.io/audio/salamander/${note}.mp3`;
-                            const response = await fetch(sampleUrl);
-                            if (response.ok) {
-                                const arrayBuffer = await response.arrayBuffer();
-                                if (!audioCtx) initAudio();
-                                const audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
-                                soundBufferCache[cacheKey] = audioBuffer;
-                                count++;
-                            }
-                        } catch (err) {
-                            // Silent catch for unavailable files, fallback synth will handle it
-                        }
-                    }
-                }
-            }
-            showNotification(`✨ Pre-loading complete! Loaded ${count} cloud instrument notes ready for offline use.`);
         }
 
         function getActiveProject() {
@@ -914,7 +885,7 @@
 
                     activeProj.clips.push(newClip);
                     selectedClipId = newClip.id;
-                    playTone(newClip.instrument, newClip.note, newClip.duration, activeProj.bpm || 120);
+                    playTone(newClip.instrument, newClip.note, newClip.duration);
                     saveAndRefresh();
                     showNotification(`Dropped ${data.note} (${data.instrument}) on Track ${trackIdx + 1}`);
                 };
@@ -944,7 +915,7 @@
                         if (e.target.classList.contains('clip-resize-handle')) return;
                         e.stopPropagation();
                         selectedClipId = clip.id;
-                        playTone(clip.instrument, clip.note, clip.duration, activeProj.bpm || 120);
+                        playTone(clip.instrument, clip.note, clip.duration);
                         renderTimeline();
 
                         const startX = e.clientX;
@@ -1042,61 +1013,20 @@
             }
         }
 
-        // --- Sound Engine with Distinct Instrument Synthesis & Cloud Caching ---
-        async function playTone(instrumentName, noteName, durationSec = 1, bpm = 120) {
+        // --- Dedicated Multi-Instrument Acoustic Synthesis Engine ---
+        function playTone(instrumentName, noteName, durationSec = 1) {
             initAudio();
-            const cacheKey = `${instrumentName}_${noteName}`;
-
-            if (soundBufferCache[cacheKey]) {
-                playBuffer(soundBufferCache[cacheKey]);
-                return;
-            }
-
-            // For drums and electronic synths, use distinctive programmatic synthesis
-            if (instrumentName.includes('Drum') || instrumentName.includes('Kick') || instrumentName.includes('Snare') || instrumentName.includes('Hi-Hat') || instrumentName.includes('Bass')) {
-                playDistinctSynth(instrumentName, noteName, durationSec);
-                return;
-            }
-
-            // Try fetching cloud sample for acoustic instruments
-            try {
-                const sampleUrl = `https://tonejs.github.io/audio/salamander/${noteName}.mp3`;
-                const response = await fetch(sampleUrl);
-                if (!response.ok) throw new Error("Sample unavailable");
-
-                const arrayBuffer = await response.arrayBuffer();
-                const audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
-                soundBufferCache[cacheKey] = audioBuffer;
-
-                playBuffer(audioBuffer);
-            } catch (error) {
-                // Fallback to distinct synth profile if offline or sample missing
-                playDistinctSynth(instrumentName, noteName, durationSec);
-            }
-        }
-
-        function playBuffer(audioBuffer) {
-            const now = audioCtx.currentTime;
-            const source = audioCtx.createBufferSource();
-            source.buffer = audioBuffer;
-            const gainNode = audioCtx.createGain();
-            gainNode.gain.setValueAtTime(0.5, now);
-            source.connect(gainNode);
-            gainNode.connect(audioCtx.destination);
-            source.start(now);
-        }
-
-        function playDistinctSynth(instrumentName, noteName, durationSec) {
             const now = audioCtx.currentTime;
             const gainNode = audioCtx.createGain();
             gainNode.connect(audioCtx.destination);
 
+            // 1. Drum Kit & Percussion
             if (instrumentName.includes('Kick')) {
                 const osc = audioCtx.createOscillator();
                 osc.type = 'sine';
                 osc.frequency.setValueAtTime(150, now);
                 osc.frequency.exponentialRampToValueAtTime(30, now + 0.12);
-                gainNode.gain.setValueAtTime(0.6, now);
+                gainNode.gain.setValueAtTime(0.7, now);
                 gainNode.gain.exponentialRampToValueAtTime(0.001, now + 0.15);
                 osc.connect(gainNode);
                 osc.start(now);
@@ -1114,8 +1044,8 @@
                 const filter = audioCtx.createBiquadFilter();
                 filter.type = 'highpass';
                 filter.frequency.setValueAtTime(1200, now);
-                gainNode.gain.setValueAtTime(0.4, now);
-                gainNode.gain.exponentialRampToValueAtTime(0.001, now + 0.1);
+                gainNode.gain.setValueAtTime(0.5, now);
+                gainNode.gain.exponentialRampToValueAtTime(0.001, now + 0.12);
                 noise.connect(filter);
                 filter.connect(gainNode);
                 noise.start(now);
@@ -1132,7 +1062,7 @@
                 const filter = audioCtx.createBiquadFilter();
                 filter.type = 'highpass';
                 filter.frequency.setValueAtTime(8000, now);
-                gainNode.gain.setValueAtTime(0.25, now);
+                gainNode.gain.setValueAtTime(0.3, now);
                 gainNode.gain.exponentialRampToValueAtTime(0.001, now + 0.04);
                 noise.connect(filter);
                 filter.connect(gainNode);
@@ -1140,45 +1070,92 @@
                 return;
             }
 
+            // Note Frequency Conversion
             let freq = 440;
-            if (noteName === 'C5') freq = 523.25;
-            else if (noteName === 'B4') freq = 493.88;
-            else if (noteName === 'A4') freq = 440.00;
-            else if (noteName === 'G4') freq = 392.00;
-            else if (noteName === 'F4') freq = 349.23;
-            else if (noteName === 'E4') freq = 329.63;
-            else if (noteName === 'D4') freq = 293.66;
-            else if (noteName === 'C4') freq = 261.63;
-            else if (noteName === 'B3') freq = 246.94;
-            else if (noteName === 'A3') freq = 220.00;
-            else if (noteName === 'G3') freq = 196.00;
-            else if (noteName === 'F3') freq = 174.61;
-            else if (noteName === 'E3') freq = 164.81;
-            else if (noteName === 'D3') freq = 146.83;
-            else if (noteName === 'C3') freq = 130.81;
-            else if (noteName === 'B2') freq = 123.47;
-            else if (noteName === 'A2') freq = 110.00;
+            const noteFreqs = {
+                'C5': 523.25, 'B4': 493.88, 'A4': 440.00, 'G4': 392.00, 'F4': 349.23, 'E4': 329.63, 'D4': 293.66, 'C4': 261.63,
+                'B3': 246.94, 'A3': 220.00, 'G3': 196.00, 'F3': 174.61, 'E3': 164.81, 'D3': 146.83, 'C3': 130.81, 'B2': 123.47, 'A2': 110.00
+            };
+            if (noteFreqs[noteName]) freq = noteFreqs[noteName];
 
             const osc = audioCtx.createOscillator();
-            
-            // Give each instrument type a distinct wave signature
-            if (instrumentName.includes('Bass')) {
-                osc.type = 'sawtooth';
-            } else if (instrumentName.includes('Flute') || instrumentName.includes('Violin')) {
+            const filter = audioCtx.createBiquadFilter();
+
+            // 2. Distinct Instrument Profiles
+            if (instrumentName.includes('Flute')) {
+                // Airy, breathy woodwind profile
                 osc.type = 'sine';
-            } else if (instrumentName.includes('Trumpet')) {
-                osc.type = 'square';
-            } else {
+                filter.type = 'lowpass';
+                filter.frequency.setValueAtTime(freq * 1.5, now);
+                gainNode.gain.setValueAtTime(0.001, now);
+                gainNode.gain.linearRampToValueAtTime(0.3, now + 0.08); // smooth breath attack
+                gainNode.gain.exponentialRampToValueAtTime(0.0001, now + Math.max(0.4, durationSec));
+                osc.connect(filter);
+                filter.connect(gainNode);
+            } 
+            else if (instrumentName.includes('Trumpet')) {
+                // Bright, brassy square waveform with dynamic filter bite
+                osc.type = 'sawtooth';
+                filter.type = 'bandpass';
+                filter.frequency.setValueAtTime(freq * 2, now);
+                filter.Q.setValueAtTime(3, now);
+                gainNode.gain.setValueAtTime(0.25, now);
+                gainNode.gain.exponentialRampToValueAtTime(0.0001, now + Math.max(0.3, durationSec));
+                osc.connect(filter);
+                filter.connect(gainNode);
+            } 
+            else if (instrumentName.includes('Violin')) {
+                // Warm string profile with subtle vibrato
+                osc.type = 'sawtooth';
+                filter.type = 'lowpass';
+                filter.frequency.setValueAtTime(freq * 3, now);
+                
+                // Add natural string vibrato LFO
+                const lfo = audioCtx.createOscillator();
+                lfo.frequency.setValueAtTime(5, now); // 5Hz vibrato speed
+                const lfoGain = audioCtx.createGain();
+                lfoGain.gain.setValueAtTime(4, now); // vibrato depth
+                lfo.connect(lfoGain);
+                lfoGain.connect(osc.frequency);
+                lfo.start(now);
+                lfo.stop(now + Math.max(0.4, durationSec));
+
+                gainNode.gain.setValueAtTime(0.001, now);
+                gainNode.gain.linearRampToValueAtTime(0.2, now + 0.1);
+                gainNode.gain.exponentialRampToValueAtTime(0.0001, now + Math.max(0.4, durationSec));
+                
+                osc.connect(filter);
+                filter.connect(gainNode);
+            } 
+            else if (instrumentName.includes('Bass')) {
+                // Heavy electronic synth bass
+                osc.type = 'sawtooth';
+                filter.type = 'lowpass';
+                filter.frequency.setValueAtTime(freq * 2, now);
+                filter.frequency.exponentialRampToValueAtTime(freq, now + 0.2);
+                gainNode.gain.setValueAtTime(0.4, now);
+                gainNode.gain.exponentialRampToValueAtTime(0.0001, now + Math.max(0.3, durationSec));
+                osc.connect(filter);
+                filter.connect(gainNode);
+            } 
+            else if (instrumentName.includes('Guitar')) {
+                // Plucked acoustic string envelope
                 osc.type = 'triangle';
+                gainNode.gain.setValueAtTime(0.35, now);
+                gainNode.gain.exponentialRampToValueAtTime(0.0001, now + Math.max(0.25, durationSec));
+                osc.connect(gainNode);
+            } 
+            else {
+                // Piano / Keys default warm harmonic profile
+                osc.type = 'triangle';
+                gainNode.gain.setValueAtTime(0.3, now);
+                gainNode.gain.exponentialRampToValueAtTime(0.0001, now + Math.max(0.3, durationSec));
+                osc.connect(gainNode);
             }
 
             osc.frequency.setValueAtTime(freq, now);
-            gainNode.gain.setValueAtTime(0.2, now);
-            gainNode.gain.exponentialRampToValueAtTime(0.0001, now + Math.max(0.3, durationSec));
-
-            osc.connect(gainNode);
             osc.start(now);
-            osc.stop(now + Math.max(0.3, durationSec));
+            osc.stop(now + Math.max(0.4, durationSec));
         }
 
         function togglePlayback() {
@@ -1201,7 +1178,7 @@
 
                 activeProj.clips.forEach(clip => {
                     if (!playedClips.has(clip.id) && playbackTimeSec >= clip.start && playbackTimeSec <= (clip.start + 0.1)) {
-                        playTone(clip.instrument, clip.note, clip.duration, bpm);
+                        playTone(clip.instrument, clip.note, clip.duration);
                         playedClips.add(clip.id);
                     }
                 });
