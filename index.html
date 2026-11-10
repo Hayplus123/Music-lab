@@ -4,6 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Open Music Lab - Timeline Editor</title>
+    <!-- Tone.js CDN for professional multi-instrument sampling -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
     <style>
         :root {
             --bg-dark: #121214;
@@ -33,7 +35,6 @@
             overflow: hidden;
         }
 
-        /* Top Notification Banner */
         #notification-banner {
             position: fixed;
             top: 15px;
@@ -57,7 +58,6 @@
             transform: translateX(-50%) translateY(0);
         }
 
-        /* Top Header */
         header {
             height: 50px;
             background-color: var(--bg-panel);
@@ -115,7 +115,6 @@
             border-color: var(--accent);
         }
 
-        /* Main Workspace Layout */
         .workspace-container {
             flex: 1;
             display: flex;
@@ -195,7 +194,6 @@
             border-color: var(--accent);
         }
 
-        /* Center Content Area */
         .center-workspace {
             flex: 1;
             display: flex;
@@ -253,7 +251,6 @@
             width: 90px;
         }
 
-        /* Timeline Container */
         .timeline-container {
             flex: 1;
             background-color: var(--bg-panel);
@@ -311,7 +308,6 @@
             white-space: nowrap;
         }
 
-        /* Playhead Indicator */
         #playhead {
             position: absolute;
             top: 0;
@@ -384,7 +380,6 @@
             background-color: rgba(99, 102, 241, 0.15);
         }
 
-        /* Timeline Clips */
         .timeline-clip {
             position: absolute;
             top: 6px;
@@ -447,7 +442,6 @@
             background-color: rgba(255,255,255,0.5);
         }
 
-        /* Bottom Instrument Bank / Folders Panel */
         .bottom-instrument-bank {
             height: 150px;
             min-height: 130px;
@@ -537,10 +531,8 @@
 </head>
 <body onclick="clearAllHighlights(event)">
 
-    <!-- Notification Banner -->
-    <div id="notification-banner">Initializing Open Music Lab...</div>
+    <div id="notification-banner">Initializing Open Music Lab Engine...</div>
 
-    <!-- Top Header -->
     <header>
         <h1>Open Music Lab <span style="font-size:0.75rem; color:var(--text-muted); font-weight:normal;">| Timeline Editor</span></h1>
         <div class="header-center">
@@ -553,7 +545,6 @@
     </header>
 
     <div class="workspace-container">
-        <!-- Sidebar: Projects -->
         <sidebar onclick="event.stopPropagation()">
             <div class="section-title">Projects</div>
             <div class="btn-group">
@@ -563,7 +554,6 @@
             <ul id="project-list" class="project-list"></ul>
         </sidebar>
 
-        <!-- Center Workspace: Timeline & Bottom Folders -->
         <div class="center-workspace" onclick="event.stopPropagation()">
             <div class="timeline-toolbar">
                 <div class="toolbar-group">
@@ -584,7 +574,6 @@
             </div>
 
             <div class="timeline-container">
-                <!-- Ruler with fixed 140px spacer and synchronized scrolling -->
                 <div class="timeline-ruler" id="timeline-ruler">
                     <div class="ruler-spacer"></div>
                     <div class="ruler-ticks-container" id="ruler-ticks-container">
@@ -594,13 +583,11 @@
                     </div>
                 </div>
 
-                <!-- Tracks Viewport -->
                 <div class="tracks-viewport" id="tracks-viewport">
                     <div class="tracks-inner-wrapper" id="tracks-inner-wrapper"></div>
                 </div>
             </div>
 
-            <!-- Bottom Instrument Folders Bank -->
             <div class="bottom-instrument-bank">
                 <div class="section-title" style="margin-bottom:6px;">Instrument Bank (DRAG note directly to track | Double-click to highlight)</div>
                 <div class="folder-grid-row" id="folder-grid-row"></div>
@@ -609,29 +596,20 @@
     </div>
 
     <script>
-        let audioCtx = null;
-        const soundBufferCache = {};
-
-        function initAudio() {
-            if (!audioCtx) {
-                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-            }
-            if (audioCtx.state === 'suspended') {
-                audioCtx.resume();
-            }
-        }
+        const samplers = {};
+        const CDN_BASE = "https://nbrosowsky.github.io/tonejs-instruments/samples/";
 
         const instruments = [
-            { name: 'Acoustic Grand Piano', soundfontKey: 'acoustic_grand_piano', category: 'Keys', color: '#3b82f6', notes: ['C5', 'B4', 'A4', 'G4', 'F4', 'E4', 'D4', 'C4', 'B3', 'A3', 'G3', 'F3', 'E3', 'D3', 'C3'] },
-            { name: 'Electric Piano', soundfontKey: 'electric_piano_1', category: 'Keys', color: '#2563eb', notes: ['C5', 'B4', 'A4', 'G4', 'F4', 'E4', 'D4', 'C4', 'B3', 'A3', 'G3', 'F3', 'E3'] },
-            { name: 'Acoustic Guitar', soundfontKey: 'acoustic_guitar_nylon', category: 'Strings', color: '#10b981', notes: ['G4', 'F4', 'E4', 'D4', 'C4', 'B3', 'A3', 'G3', 'F3', 'E3', 'D3', 'C3', 'B2', 'A2'] },
-            { name: 'Synth Bass', soundfontKey: 'synth_bass_1', category: 'Electronic', color: '#ef4444', notes: ['G3', 'F3', 'E3', 'D3', 'C3', 'B2', 'A2'] },
-            { name: 'Violin', soundfontKey: 'violin', category: 'Strings', color: '#047857', notes: ['C5', 'B4', 'A4', 'G4', 'F4', 'E4', 'D4', 'C4'] },
-            { name: 'Flute', soundfontKey: 'flute', category: 'Woodwind', color: '#8b5cf6', notes: ['C5', 'B4', 'A4', 'G4', 'F4', 'E4', 'D4', 'C4'] },
-            { name: 'Trumpet', soundfontKey: 'trumpet', category: 'Brass', color: '#f59e0b', notes: ['C5', 'B4', 'A4', 'G4', 'F4', 'E4', 'D4', 'C4'] },
-            { name: 'Drum Kit (Kick)', soundfontKey: 'drum_kick', category: 'Drums', color: '#eab308', notes: ['Kick'] },
-            { name: 'Drum Kit (Snare)', soundfontKey: 'drum_snare', category: 'Drums', color: '#84cc16', notes: ['Snare'] },
-            { name: 'Drum Kit (Hi-Hat)', soundfontKey: 'drum_hihat', category: 'Drums', color: '#06b6d4', notes: ['Hi-Hat'] }
+            { name: 'Acoustic Grand Piano', key: 'piano', category: 'Keys', color: '#3b82f6', notes: ['C5', 'B4', 'A4', 'G4', 'F4', 'E4', 'D4', 'C4', 'B3', 'A3', 'G3', 'F3', 'E3', 'D3', 'C3'] },
+            { name: 'Electric Piano', key: 'piano', category: 'Keys', color: '#2563eb', notes: ['C5', 'B4', 'A4', 'G4', 'F4', 'E4', 'D4', 'C4', 'B3', 'A3', 'G3', 'F3', 'E3'] },
+            { name: 'Acoustic Guitar', key: 'guitar-acoustic', category: 'Strings', color: '#10b981', notes: ['G4', 'F4', 'E4', 'D4', 'C4', 'B3', 'A3', 'G3', 'F3', 'E3', 'D3', 'C3', 'B2', 'A2'] },
+            { name: 'Synth Bass', key: 'bass-electric', category: 'Electronic', color: '#ef4444', notes: ['G3', 'F3', 'E3', 'D3', 'C3', 'B2', 'A2'] },
+            { name: 'Violin', key: 'violin', category: 'Strings', color: '#047857', notes: ['C5', 'B4', 'A4', 'G4', 'F4', 'E4', 'D4', 'C4'] },
+            { name: 'Flute', key: 'flute', category: 'Woodwind', color: '#8b5cf6', notes: ['C5', 'B4', 'A4', 'G4', 'F4', 'E4', 'D4', 'C4'] },
+            { name: 'Trumpet', key: 'trumpet', category: 'Brass', color: '#f59e0b', notes: ['C5', 'B4', 'A4', 'G4', 'F4', 'E4', 'D4', 'C4'] },
+            { name: 'Drum Kit (Kick)', key: 'drum_kick', category: 'Drums', color: '#eab308', notes: ['Kick'] },
+            { name: 'Drum Kit (Snare)', key: 'drum_snare', category: 'Drums', color: '#84cc16', notes: ['Snare'] },
+            { name: 'Drum Kit (Hi-Hat)', key: 'drum_hihat', category: 'Drums', color: '#06b6d4', notes: ['Hi-Hat'] }
         ];
 
         let projects = JSON.parse(localStorage.getItem('music_lab_timeline_projects')) || [
@@ -660,6 +638,29 @@
             renderTimeline();
         }
 
+        function initSamplers() {
+            showNotification("🌐 Loading real multi-sample orchestral banks...");
+            
+            const sampleMap = {
+                'flute': { 'C4': 'C4.mp3', 'C5': 'C5.mp3', 'A4': 'A4.mp3' },
+                'trumpet': { 'C4': 'C4.mp3', 'C5': 'C5.mp3', 'A4': 'A4.mp3' },
+                'violin': { 'C4': 'C4.mp3', 'C5': 'C5.mp3', 'A4': 'A4.mp3' },
+                'guitar-acoustic': { 'C4': 'C4.mp3', 'A3': 'A3.mp3' },
+                'bass-electric': { 'C3': 'C3.mp3', 'A2': 'A2.mp3' },
+                'piano': { 'C4': 'C4.mp3', 'C5': 'C5.mp3', 'A3': 'A3.mp3' }
+            };
+
+            for (const [key, mapping] of Object.entries(sampleMap)) {
+                samplers[key] = new Tone.Sampler({
+                    urls: mapping,
+                    baseUrl: `${CDN_BASE}${key}/`,
+                    onload: () => {
+                        if (key === 'flute') showNotification("✨ Real Flute & Orchestral engine ready!");
+                    }
+                }).toDestination();
+            }
+        }
+
         async function init() {
             renderProjects();
             renderInstrumentFolders();
@@ -673,7 +674,7 @@
             renderTimeline();
             updateTimeDisplay(0);
 
-            showNotification("🎵 Open Music Lab ready with Real Soundfont Recordings!");
+            initSamplers();
 
             window.addEventListener('keydown', (e) => {
                 if ((e.key === 'Backspace' || e.key === 'Delete') && selectedClipId) {
@@ -765,7 +766,7 @@
                     chip.ondragstart = (e) => {
                         e.dataTransfer.setData('text/plain', JSON.stringify({
                             instrument: inst.name,
-                            soundfontKey: inst.soundfontKey,
+                            key: inst.key,
                             note: note,
                             color: inst.color
                         }));
@@ -877,7 +878,7 @@
                     const newClip = {
                         id: Date.now() + Math.random(),
                         instrument: data.instrument,
-                        soundfontKey: data.soundfontKey,
+                        key: data.key,
                         note: data.note,
                         color: data.color,
                         track: trackIdx,
@@ -887,7 +888,7 @@
 
                     activeProj.clips.push(newClip);
                     selectedClipId = newClip.id;
-                    playTone(newClip.soundfontKey, newClip.note, newClip.instrument);
+                    playTone(newClip.key, newClip.note, newClip.duration);
                     saveAndRefresh();
                     showNotification(`Dropped ${data.note} (${data.instrument}) on Track ${trackIdx + 1}`);
                 };
@@ -917,7 +918,7 @@
                         if (e.target.classList.contains('clip-resize-handle')) return;
                         e.stopPropagation();
                         selectedClipId = clip.id;
-                        playTone(clip.soundfontKey, clip.note, clip.instrument);
+                        playTone(clip.key, clip.note, clip.duration);
                         renderTimeline();
 
                         const startX = e.clientX;
@@ -1015,138 +1016,45 @@
             }
         }
 
-// --- Direct Open-Source MP3 Sample Engine ---
-async function playTone(soundfontKey, noteName, instrumentName) {
-    initAudio();
-    const cacheKey = `${soundfontKey}_${noteName}`;
+        // --- Tone.js Engine Integration ---
+        async function playTone(key, noteName, durationSec = 1.5) {
+            await Tone.start();
 
-    if (soundBufferCache[cacheKey]) {
-        playBuffer(soundBufferCache[cacheKey]);
-        return;
-    }
+            if (key.startsWith('drum_')) {
+                playDrumSound(key);
+                return;
+            }
 
-    // Handle Percussion Drums
-    if (soundfontKey.startsWith('drum_')) {
-        playDrumSound(soundfontKey);
-        return;
-    }
-
-    showNotification(`🌐 Fetching real ${instrumentName} (${noteName})...`);
-
-    try {
-        // Direct MP3 URL mapping from open-source audio CDN
-        let folderName = 'piano';
-        if (soundfontKey.includes('flute')) folderName = 'flute';
-        else if (soundfontKey.includes('trumpet')) folderName = 'trumpet';
-        else if (soundfontKey.includes('violin')) folderName = 'violin';
-        else if (soundfontKey.includes('guitar')) folderName = 'guitar-acoustic';
-        else if (soundfontKey.includes('bass')) folderName = 'bass-electric';
-
-        const url = `https://cdn.jsdelivr.net/gh/nbrosowsky/tonejs-instruments@master/samples/${folderName}/${noteName}.mp3`;
-        
-        const response = await fetch(url);
-        if (!response.ok) throw new Error("Sample unavailable");
-        
-        const arrayBuffer = await response.arrayBuffer();
-        const audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
-
-        soundBufferCache[cacheKey] = audioBuffer;
-        showNotification(`✨ Loaded real ${instrumentName} (${noteName})!`);
-        playBuffer(audioBuffer);
-
-    } catch (error) {
-        showNotification(`⚠️ Could not fetch MP3 sample, using synth backup.`);
-        playSynthFallback(noteName);
-    }
-}
-
-        function playBuffer(audioBuffer) {
-            const now = audioCtx.currentTime;
-            const source = audioCtx.createBufferSource();
-            source.buffer = audioBuffer;
-            const gainNode = audioCtx.createGain();
-            gainNode.gain.setValueAtTime(0.7, now);
-            source.connect(gainNode);
-            gainNode.connect(audioCtx.destination);
-            source.start(now);
-        }
-
-        function playDrumSound(type) {
-            const now = audioCtx.currentTime;
-            const gainNode = audioCtx.createGain();
-            gainNode.connect(audioCtx.destination);
-
-            if (type === 'drum_kick') {
-                const osc = audioCtx.createOscillator();
-                osc.type = 'sine';
-                osc.frequency.setValueAtTime(150, now);
-                osc.frequency.exponentialRampToValueAtTime(30, now + 0.12);
-                gainNode.gain.setValueAtTime(0.8, now);
-                gainNode.gain.exponentialRampToValueAtTime(0.001, now + 0.15);
-                osc.connect(gainNode);
-                osc.start(now);
-                osc.stop(now + 0.15);
-            } else if (type === 'drum_snare') {
-                const bufferSize = audioCtx.sampleRate * 0.1;
-                const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
-                const data = buffer.getChannelData(0);
-                for (let i = 0; i < bufferSize; i++) data[i] = Math.random() * 2 - 1;
-                const noise = audioCtx.createBufferSource();
-                noise.buffer = buffer;
-                const filter = audioCtx.createBiquadFilter();
-                filter.type = 'highpass';
-                filter.frequency.setValueAtTime(1200, now);
-                gainNode.gain.setValueAtTime(0.5, now);
-                gainNode.gain.exponentialRampToValueAtTime(0.001, now + 0.1);
-                noise.connect(filter);
-                filter.connect(gainNode);
-                noise.start(now);
-            } else if (type === 'drum_hihat') {
-                const bufferSize = audioCtx.sampleRate * 0.04;
-                const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
-                const data = buffer.getChannelData(0);
-                for (let i = 0; i < bufferSize; i++) data[i] = Math.random() * 2 - 1;
-                const noise = audioCtx.createBufferSource();
-                noise.buffer = buffer;
-                const filter = audioCtx.createBiquadFilter();
-                filter.type = 'highpass';
-                filter.frequency.setValueAtTime(8000, now);
-                gainNode.gain.setValueAtTime(0.3, now);
-                gainNode.gain.exponentialRampToValueAtTime(0.001, now + 0.04);
-                noise.connect(filter);
-                filter.connect(gainNode);
-                noise.start(now);
+            if (samplers[key] && samplers[key].loaded) {
+                samplers[key].triggerAttackRelease(noteName, durationSec);
+            } else {
+                showNotification(`⏳ Sample still loading for ${key}...`);
             }
         }
 
-        function playSynthFallback(noteName) {
-            const now = audioCtx.currentTime;
-            const osc = audioCtx.createOscillator();
-            const gain = audioCtx.createGain();
-            let freq = 440;
-            if (noteName === 'C5') freq = 523.25;
-            else if (noteName === 'C4') freq = 261.63;
-            else if (noteName === 'A4') freq = 440.00;
-            
-            osc.frequency.setValueAtTime(freq, now);
-            gain.gain.setValueAtTime(0.3, now);
-            gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.5);
-            osc.connect(gain);
-            gain.connect(audioCtx.destination);
-            osc.start(now);
-            osc.stop(now + 0.5);
+        function playDrumSound(type) {
+            const synth = new Tone.MembraneSynth().toDestination();
+            const noise = new Tone.NoiseSynth().toDestination();
+
+            if (type === 'drum_kick') {
+                synth.triggerAttackRelease("C1", "8n");
+            } else if (type === 'drum_snare') {
+                noise.triggerAttackRelease("16n");
+            } else if (type === 'drum_hihat') {
+                noise.volume.value = -12;
+                noise.triggerAttackRelease("32n");
+            }
         }
 
         function togglePlayback() {
-            initAudio();
             if (isPlaying) stopPlayback(); else startPlayback();
         }
 
         function startPlayback() {
+            Tone.start();
             isPlaying = true;
             document.getElementById('play-btn').innerText = '⏸ Pause';
             const activeProj = getActiveProject();
-            const bpm = activeProj.bpm || 120;
             const startTime = performance.now() - (playbackTimeSec * 1000);
             const playedClips = new Set();
 
@@ -1157,7 +1065,7 @@ async function playTone(soundfontKey, noteName, instrumentName) {
 
                 activeProj.clips.forEach(clip => {
                     if (!playedClips.has(clip.id) && playbackTimeSec >= clip.start && playbackTimeSec <= (clip.start + 0.1)) {
-                        playTone(clip.soundfontKey, clip.note, clip.instrument);
+                        playTone(clip.key, clip.note, clip.duration);
                         playedClips.add(clip.id);
                     }
                 });
