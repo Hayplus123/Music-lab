@@ -14,7 +14,7 @@
             --text-main: #f3f4f6;
             --text-muted: #9ca3af;
             --border: #2e2e38;
-            --error-bg: #ef4444;
+            --error-bg: #4f46e5;
         }
 
         * {
@@ -610,6 +610,7 @@
 
     <script>
         let audioCtx = null;
+        const soundBufferCache = {}; // In-memory cache to save bandwidth & credits after first fetch
 
         function initAudio() {
             if (!audioCtx) {
@@ -663,7 +664,6 @@
             renderProjects();
             renderInstrumentFolders();
             
-            // Synchronize Horizontal Scroll between Track Viewport and Ruler Ticks
             const viewport = document.getElementById('tracks-viewport');
             const rulerInner = document.getElementById('ruler-inner-ticks');
             viewport.addEventListener('scroll', () => {
@@ -800,8 +800,6 @@
             const activeProj = getActiveProject();
             const pxPerSec = 100 * zoomLevel;
 
-            // Canva-style Auto Expansion calculation:
-            // Ensures timeline has room past the furthest note or at least 180s
             let maxClipEnd = 180;
             activeProj.clips.forEach(clip => {
                 const clipEnd = clip.start + clip.duration;
@@ -810,11 +808,9 @@
                 }
             });
 
-            // Set inner elements widths based on timeline length
             innerWrapper.style.width = `${maxClipEnd * pxPerSec}px`;
             rulerInner.style.width = `${maxClipEnd * pxPerSec}px`;
 
-            // Smart Dynamic interval calculation for ruler ticks
             const targetPixels = 80;
             const niceSteps = [0.001, 0.002, 0.005, 0.01, 0.02, 0.05, 0.1, 0.2, 0.5, 1, 2, 5, 10, 15, 30, 60, 120, 300, 600];
             let step = niceSteps[niceSteps.length - 1];
@@ -913,7 +909,6 @@
                         <div class="clip-resize-handle" title="Drag edge to resize duration"></div>
                     `;
 
-                    // DRAG EXISTING NOTE CLIP WITH AUTO-EXPAND
                     clipEl.onmousedown = (e) => {
                         if (e.target.classList.contains('clip-resize-handle')) return;
                         e.stopPropagation();
@@ -930,7 +925,6 @@
                             clip.start = newStart;
                             clipEl.style.left = `${clip.start * pxPerSec}px`;
 
-                            // If dragged near or beyond current boundary, dynamically re-render timeline expansion
                             if (clip.start + clip.duration + 5 > maxClipEnd) {
                                 renderTimeline();
                             }
@@ -1017,9 +1011,64 @@
             }
         }
 
-        // Web Audio Engine
-        function playTone(instrumentName, noteName, durationSec = 1, bpm = 120) {
+        // --- Cloud CDN Sound Engine with Notifications & Caching ---
+        async function playTone(instrumentName, noteName, durationSec = 1, bpm = 120) {
             initAudio();
+            const cacheKey = `${instrumentName}_${noteName}`;
+
+            // Check if already cached in memory
+            if (soundBufferCache[cacheKey]) {
+                playBuffer(soundBufferCache[cacheKey], durationSec);
+                return;
+            }
+
+            // Fallback synth for drums or if offline/unavailable
+            if (instrumentName.includes('Drum') || instrumentName.includes('Kick') || instrumentName.includes('Snare') || instrumentName.includes('Hi-Hat')) {
+                playFallbackSynth(instrumentName, noteName, durationSec);
+                return;
+            }
+
+            // Notify user fetching has started
+            showNotification(`🌐 Fetching sound for ${noteName} (${instrumentName})...`);
+
+            try {
+                // Public CDN sample URL mapping (using open-source audio samples)
+                const sampleUrl = `https://tonejs.github.io/audio/salamander/${noteName}.mp3`;
+                
+                const response = await fetch(sampleUrl);
+                if (!response.ok) throw new Error("Sample unavailable on CDN");
+
+                const arrayBuffer = await response.arrayBuffer();
+                const audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
+
+                // Store in memory cache for instant future replays
+                soundBufferCache[cacheKey] = audioBuffer;
+
+                // Notify user fetching is done / successful
+                showNotification(`✨ Loaded ${noteName} (${instrumentName}) successfully!`);
+                playBuffer(audioBuffer, durationSec);
+
+            } catch (error) {
+                // Notify user sound is unavailable and falling back
+                showNotification(`⚠️ Sound unavailable for ${noteName}, using backup synth.`);
+                playFallbackSynth(instrumentName, noteName, durationSec);
+            }
+        }
+
+        function playBuffer(audioBuffer, durationSec) {
+            const now = audioCtx.currentTime;
+            const source = audioCtx.createBufferSource();
+            source.buffer = audioBuffer;
+            
+            const gainNode = audioCtx.createGain();
+            gainNode.gain.setValueAtTime(0.5, now);
+            
+            source.connect(gainNode);
+            gainNode.connect(audioCtx.destination);
+            source.start(now);
+        }
+
+        function playFallbackSynth(instrumentName, noteName, durationSec) {
             const now = audioCtx.currentTime;
             const gainNode = audioCtx.createGain();
             gainNode.connect(audioCtx.destination);
