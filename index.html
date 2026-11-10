@@ -1015,7 +1015,7 @@
             }
         }
 
-        // --- Real Soundfont & Percussion Engine ---
+        // --- Real Soundfont & Percussion Engine (Case-Sensitive Fixed) ---
         async function playTone(soundfontKey, noteName, instrumentName) {
             initAudio();
             const cacheKey = `${soundfontKey}_${noteName}`;
@@ -1034,9 +1034,8 @@
             showNotification(`🌐 Fetching real recording for ${noteName} (${instrumentName})...`);
 
             try {
-                // Fetch real MIDI.js soundfont recording from public CDN
-                const noteLower = noteName.toLowerCase();
-                const url = `https://cdn.jsdelivr.net/gh/gleitz/midi-js-soundfonts@master/FluidR3_GM/${soundfontKey}-${noteLower}.js`;
+                // FIXED: Retain exact uppercase noteName (e.g. A4) matching GitHub case-sensitivity
+                const url = `https://cdn.jsdelivr.net/gh/gleitz/midi-js-soundfonts@master/FluidR3_GM/${soundfontKey}-${noteName}.js`;
                 
                 const response = await fetch(url);
                 if (!response.ok) throw new Error("Soundfont asset unavailable");
@@ -1192,7 +1191,7 @@
             const name = prompt("Enter project name:", `Project ${projects.length + 1}`);
             if (!name) return;
             const newProj = { id: Date.now(), name: name, clips: [], bpm: 120, zoom: 1 };
-                projects.push(newProj);
+            projects.push(newProj);
             saveAndRefresh();
             switchProject(newProj.id);
         }
