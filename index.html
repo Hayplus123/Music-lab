@@ -538,7 +538,7 @@
 <body onclick="clearAllHighlights(event)">
 
     <!-- Notification Banner -->
-    <div id="notification-banner">Action successful.</div>
+    <div id="notification-banner">Initializing Open Music Lab...</div>
 
     <!-- Top Header -->
     <header>
@@ -610,7 +610,7 @@
 
     <script>
         let audioCtx = null;
-        const soundBufferCache = {}; // In-memory cache to save bandwidth & credits after first fetch
+        const soundBufferCache = {}; // In-memory cache to save bandwidth & credits
 
         function initAudio() {
             if (!audioCtx) {
@@ -660,7 +660,7 @@
             renderTimeline();
         }
 
-        function init() {
+        async function init() {
             renderProjects();
             renderInstrumentFolders();
             
@@ -673,6 +673,9 @@
             renderTimeline();
             updateTimeDisplay(0);
 
+            // Automatically pre-load all cloud sound samples when entered
+            await preloadAllSounds();
+
             window.addEventListener('keydown', (e) => {
                 if ((e.key === 'Backspace' || e.key === 'Delete') && selectedClipId) {
                     const activeProj = getActiveProject();
@@ -682,6 +685,34 @@
                     showNotification("Clip deleted.");
                 }
             });
+        }
+
+        async function preloadAllSounds() {
+            showNotification("📥 Pre-loading all instrument sounds from cloud CDN...");
+            let count = 0;
+            
+            for (const inst of instruments) {
+                if (inst.notes[0] === 'Kick' || inst.notes[0] === 'Snare' || inst.notes[0] === 'Hi-Hat') continue;
+                for (const note of inst.notes) {
+                    const cacheKey = `${inst.name}_${note}`;
+                    if (!soundBufferCache[cacheKey]) {
+                        try {
+                            const sampleUrl = `https://tonejs.github.io/audio/salamander/${note}.mp3`;
+                            const response = await fetch(sampleUrl);
+                            if (response.ok) {
+                                const arrayBuffer = await response.arrayBuffer();
+                                if (!audioCtx) initAudio();
+                                const audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
+                                soundBufferCache[cacheKey] = audioBuffer;
+                                count++;
+                            }
+                        } catch (err) {
+                            // Silent catch for unavailable files, fallback synth will handle it
+                        }
+                    }
+                }
+            }
+            showNotification(`✨ Pre-loading complete! Loaded ${count} cloud instrument notes ready for offline use.`);
         }
 
         function getActiveProject() {
@@ -1011,64 +1042,51 @@
             }
         }
 
-        // --- Cloud CDN Sound Engine with Notifications & Caching ---
+        // --- Sound Engine with Distinct Instrument Synthesis & Cloud Caching ---
         async function playTone(instrumentName, noteName, durationSec = 1, bpm = 120) {
             initAudio();
             const cacheKey = `${instrumentName}_${noteName}`;
 
-            // Check if already cached in memory
             if (soundBufferCache[cacheKey]) {
-                playBuffer(soundBufferCache[cacheKey], durationSec);
+                playBuffer(soundBufferCache[cacheKey]);
                 return;
             }
 
-            // Fallback synth for drums or if offline/unavailable
-            if (instrumentName.includes('Drum') || instrumentName.includes('Kick') || instrumentName.includes('Snare') || instrumentName.includes('Hi-Hat')) {
-                playFallbackSynth(instrumentName, noteName, durationSec);
+            // For drums and electronic synths, use distinctive programmatic synthesis
+            if (instrumentName.includes('Drum') || instrumentName.includes('Kick') || instrumentName.includes('Snare') || instrumentName.includes('Hi-Hat') || instrumentName.includes('Bass')) {
+                playDistinctSynth(instrumentName, noteName, durationSec);
                 return;
             }
 
-            // Notify user fetching has started
-            showNotification(`🌐 Fetching sound for ${noteName} (${instrumentName})...`);
-
+            // Try fetching cloud sample for acoustic instruments
             try {
-                // Public CDN sample URL mapping (using open-source audio samples)
                 const sampleUrl = `https://tonejs.github.io/audio/salamander/${noteName}.mp3`;
-                
                 const response = await fetch(sampleUrl);
-                if (!response.ok) throw new Error("Sample unavailable on CDN");
+                if (!response.ok) throw new Error("Sample unavailable");
 
                 const arrayBuffer = await response.arrayBuffer();
                 const audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
-
-                // Store in memory cache for instant future replays
                 soundBufferCache[cacheKey] = audioBuffer;
 
-                // Notify user fetching is done / successful
-                showNotification(`✨ Loaded ${noteName} (${instrumentName}) successfully!`);
-                playBuffer(audioBuffer, durationSec);
-
+                playBuffer(audioBuffer);
             } catch (error) {
-                // Notify user sound is unavailable and falling back
-                showNotification(`⚠️ Sound unavailable for ${noteName}, using backup synth.`);
-                playFallbackSynth(instrumentName, noteName, durationSec);
+                // Fallback to distinct synth profile if offline or sample missing
+                playDistinctSynth(instrumentName, noteName, durationSec);
             }
         }
 
-        function playBuffer(audioBuffer, durationSec) {
+        function playBuffer(audioBuffer) {
             const now = audioCtx.currentTime;
             const source = audioCtx.createBufferSource();
             source.buffer = audioBuffer;
-            
             const gainNode = audioCtx.createGain();
             gainNode.gain.setValueAtTime(0.5, now);
-            
             source.connect(gainNode);
             gainNode.connect(audioCtx.destination);
             source.start(now);
         }
 
-        function playFallbackSynth(instrumentName, noteName, durationSec) {
+        function playDistinctSynth(instrumentName, noteName, durationSec) {
             const now = audioCtx.currentTime;
             const gainNode = audioCtx.createGain();
             gainNode.connect(audioCtx.destination);
@@ -1078,7 +1096,7 @@
                 osc.type = 'sine';
                 osc.frequency.setValueAtTime(150, now);
                 osc.frequency.exponentialRampToValueAtTime(30, now + 0.12);
-                gainNode.gain.setValueAtTime(0.5, now);
+                gainNode.gain.setValueAtTime(0.6, now);
                 gainNode.gain.exponentialRampToValueAtTime(0.001, now + 0.15);
                 osc.connect(gainNode);
                 osc.start(now);
@@ -1095,8 +1113,8 @@
                 noise.buffer = buffer;
                 const filter = audioCtx.createBiquadFilter();
                 filter.type = 'highpass';
-                filter.frequency.setValueAtTime(1000, now);
-                gainNode.gain.setValueAtTime(0.3, now);
+                filter.frequency.setValueAtTime(1200, now);
+                gainNode.gain.setValueAtTime(0.4, now);
                 gainNode.gain.exponentialRampToValueAtTime(0.001, now + 0.1);
                 noise.connect(filter);
                 filter.connect(gainNode);
@@ -1113,8 +1131,8 @@
                 noise.buffer = buffer;
                 const filter = audioCtx.createBiquadFilter();
                 filter.type = 'highpass';
-                filter.frequency.setValueAtTime(7000, now);
-                gainNode.gain.setValueAtTime(0.2, now);
+                filter.frequency.setValueAtTime(8000, now);
+                gainNode.gain.setValueAtTime(0.25, now);
                 gainNode.gain.exponentialRampToValueAtTime(0.001, now + 0.04);
                 noise.connect(filter);
                 filter.connect(gainNode);
@@ -1142,7 +1160,18 @@
             else if (noteName === 'A2') freq = 110.00;
 
             const osc = audioCtx.createOscillator();
-            osc.type = instrumentName.includes('Bass') ? 'sawtooth' : 'triangle';
+            
+            // Give each instrument type a distinct wave signature
+            if (instrumentName.includes('Bass')) {
+                osc.type = 'sawtooth';
+            } else if (instrumentName.includes('Flute') || instrumentName.includes('Violin')) {
+                osc.type = 'sine';
+            } else if (instrumentName.includes('Trumpet')) {
+                osc.type = 'square';
+            } else {
+                osc.type = 'triangle';
+            }
+
             osc.frequency.setValueAtTime(freq, now);
             gainNode.gain.setValueAtTime(0.2, now);
             gainNode.gain.exponentialRampToValueAtTime(0.0001, now + Math.max(0.3, durationSec));
