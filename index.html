@@ -622,16 +622,16 @@
         }
 
         const instruments = [
-            { name: 'Acoustic Grand Piano', category: 'Keys', color: '#3b82f6', notes: ['C5', 'B4', 'A4', 'G4', 'F4', 'E4', 'D4', 'C4', 'B3', 'A3', 'G3', 'F3', 'E3', 'D3', 'C3'] },
-            { name: 'Electric Piano', category: 'Keys', color: '#2563eb', notes: ['C5', 'B4', 'A4', 'G4', 'F4', 'E4', 'D4', 'C4', 'B3', 'A3', 'G3', 'F3', 'E3'] },
-            { name: 'Acoustic Guitar', category: 'Strings', color: '#10b981', notes: ['G4', 'F4', 'E4', 'D4', 'C4', 'B3', 'A3', 'G3', 'F3', 'E3', 'D3', 'C3', 'B2', 'A2'] },
-            { name: 'Synth Bass', category: 'Electronic', color: '#ef4444', notes: ['G3', 'F3', 'E3', 'D3', 'C3', 'B2', 'A2'] },
-            { name: 'Violin', category: 'Strings', color: '#047857', notes: ['C5', 'B4', 'A4', 'G4', 'F4', 'E4', 'D4', 'C4'] },
-            { name: 'Flute', category: 'Woodwind', color: '#8b5cf6', notes: ['C5', 'B4', 'A4', 'G4', 'F4', 'E4', 'D4', 'C4'] },
-            { name: 'Trumpet', category: 'Brass', color: '#f59e0b', notes: ['C5', 'B4', 'A4', 'G4', 'F4', 'E4', 'D4', 'C4'] },
-            { name: 'Drum Kit (Kick)', category: 'Drums', color: '#eab308', notes: ['Kick'] },
-            { name: 'Drum Kit (Snare)', category: 'Drums', color: '#84cc16', notes: ['Snare'] },
-            { name: 'Drum Kit (Hi-Hat)', category: 'Drums', color: '#06b6d4', notes: ['Hi-Hat'] }
+            { name: 'Acoustic Grand Piano', soundfontKey: 'acoustic_grand_piano', category: 'Keys', color: '#3b82f6', notes: ['C5', 'B4', 'A4', 'G4', 'F4', 'E4', 'D4', 'C4', 'B3', 'A3', 'G3', 'F3', 'E3', 'D3', 'C3'] },
+            { name: 'Electric Piano', soundfontKey: 'electric_piano_1', category: 'Keys', color: '#2563eb', notes: ['C5', 'B4', 'A4', 'G4', 'F4', 'E4', 'D4', 'C4', 'B3', 'A3', 'G3', 'F3', 'E3'] },
+            { name: 'Acoustic Guitar', soundfontKey: 'acoustic_guitar_nylon', category: 'Strings', color: '#10b981', notes: ['G4', 'F4', 'E4', 'D4', 'C4', 'B3', 'A3', 'G3', 'F3', 'E3', 'D3', 'C3', 'B2', 'A2'] },
+            { name: 'Synth Bass', soundfontKey: 'synth_bass_1', category: 'Electronic', color: '#ef4444', notes: ['G3', 'F3', 'E3', 'D3', 'C3', 'B2', 'A2'] },
+            { name: 'Violin', soundfontKey: 'violin', category: 'Strings', color: '#047857', notes: ['C5', 'B4', 'A4', 'G4', 'F4', 'E4', 'D4', 'C4'] },
+            { name: 'Flute', soundfontKey: 'flute', category: 'Woodwind', color: '#8b5cf6', notes: ['C5', 'B4', 'A4', 'G4', 'F4', 'E4', 'D4', 'C4'] },
+            { name: 'Trumpet', soundfontKey: 'trumpet', category: 'Brass', color: '#f59e0b', notes: ['C5', 'B4', 'A4', 'G4', 'F4', 'E4', 'D4', 'C4'] },
+            { name: 'Drum Kit (Kick)', soundfontKey: 'drum_kick', category: 'Drums', color: '#eab308', notes: ['Kick'] },
+            { name: 'Drum Kit (Snare)', soundfontKey: 'drum_snare', category: 'Drums', color: '#84cc16', notes: ['Snare'] },
+            { name: 'Drum Kit (Hi-Hat)', soundfontKey: 'drum_hihat', category: 'Drums', color: '#06b6d4', notes: ['Hi-Hat'] }
         ];
 
         let projects = JSON.parse(localStorage.getItem('music_lab_timeline_projects')) || [
@@ -673,7 +673,7 @@
             renderTimeline();
             updateTimeDisplay(0);
 
-            showNotification("🎹 Open Music Lab ready! All instruments loaded.");
+            showNotification("🎵 Open Music Lab ready with Real Soundfont Recordings!");
 
             window.addEventListener('keydown', (e) => {
                 if ((e.key === 'Backspace' || e.key === 'Delete') && selectedClipId) {
@@ -765,6 +765,7 @@
                     chip.ondragstart = (e) => {
                         e.dataTransfer.setData('text/plain', JSON.stringify({
                             instrument: inst.name,
+                            soundfontKey: inst.soundfontKey,
                             note: note,
                             color: inst.color
                         }));
@@ -876,6 +877,7 @@
                     const newClip = {
                         id: Date.now() + Math.random(),
                         instrument: data.instrument,
+                        soundfontKey: data.soundfontKey,
                         note: data.note,
                         color: data.color,
                         track: trackIdx,
@@ -885,7 +887,7 @@
 
                     activeProj.clips.push(newClip);
                     selectedClipId = newClip.id;
-                    playTone(newClip.instrument, newClip.note, newClip.duration);
+                    playTone(newClip.soundfontKey, newClip.note, newClip.instrument);
                     saveAndRefresh();
                     showNotification(`Dropped ${data.note} (${data.instrument}) on Track ${trackIdx + 1}`);
                 };
@@ -915,7 +917,7 @@
                         if (e.target.classList.contains('clip-resize-handle')) return;
                         e.stopPropagation();
                         selectedClipId = clip.id;
-                        playTone(clip.instrument, clip.note, clip.duration);
+                        playTone(clip.soundfontKey, clip.note, clip.instrument);
                         renderTimeline();
 
                         const startX = e.clientX;
@@ -1013,28 +1015,79 @@
             }
         }
 
-        // --- Dedicated Multi-Instrument Acoustic Synthesis Engine ---
-        function playTone(instrumentName, noteName, durationSec = 1) {
+        // --- Real Soundfont & Percussion Engine ---
+        async function playTone(soundfontKey, noteName, instrumentName) {
             initAudio();
+            const cacheKey = `${soundfontKey}_${noteName}`;
+
+            if (soundBufferCache[cacheKey]) {
+                playBuffer(soundBufferCache[cacheKey]);
+                return;
+            }
+
+            // Handle Percussion Drums
+            if (soundfontKey.startsWith('drum_')) {
+                playDrumSound(soundfontKey);
+                return;
+            }
+
+            showNotification(`🌐 Fetching real recording for ${noteName} (${instrumentName})...`);
+
+            try {
+                // Fetch real MIDI.js soundfont recording from public CDN
+                const noteLower = noteName.toLowerCase();
+                const url = `https://cdn.jsdelivr.net/gh/gleitz/midi-js-soundfonts@master/FluidR3_GM/${soundfontKey}-${noteLower}.js`;
+                
+                const response = await fetch(url);
+                if (!response.ok) throw new Error("Soundfont asset unavailable");
+                const text = await response.text();
+
+                // Extract base64 audio data URI from the soundfont JS file
+                const base64Match = text.match(/["']data:audio\/mp3;base64,[^"']+["']/);
+                if (!base64Match) throw new Error("Invalid soundfont data format");
+
+                const dataUri = base64Match[0].slice(1, -1);
+                const audioRes = await fetch(dataUri);
+                const arrayBuffer = await audioRes.arrayBuffer();
+                const audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
+
+                soundBufferCache[cacheKey] = audioBuffer;
+                showNotification(`✨ Loaded real recording for ${noteName} (${instrumentName})!`);
+                playBuffer(audioBuffer);
+
+            } catch (error) {
+                showNotification(`⚠️ Could not fetch sample, using synth backup.`);
+                playSynthFallback(noteName);
+            }
+        }
+
+        function playBuffer(audioBuffer) {
+            const now = audioCtx.currentTime;
+            const source = audioCtx.createBufferSource();
+            source.buffer = audioBuffer;
+            const gainNode = audioCtx.createGain();
+            gainNode.gain.setValueAtTime(0.7, now);
+            source.connect(gainNode);
+            gainNode.connect(audioCtx.destination);
+            source.start(now);
+        }
+
+        function playDrumSound(type) {
             const now = audioCtx.currentTime;
             const gainNode = audioCtx.createGain();
             gainNode.connect(audioCtx.destination);
 
-            // 1. Drum Kit & Percussion
-            if (instrumentName.includes('Kick')) {
+            if (type === 'drum_kick') {
                 const osc = audioCtx.createOscillator();
                 osc.type = 'sine';
                 osc.frequency.setValueAtTime(150, now);
                 osc.frequency.exponentialRampToValueAtTime(30, now + 0.12);
-                gainNode.gain.setValueAtTime(0.7, now);
+                gainNode.gain.setValueAtTime(0.8, now);
                 gainNode.gain.exponentialRampToValueAtTime(0.001, now + 0.15);
                 osc.connect(gainNode);
                 osc.start(now);
                 osc.stop(now + 0.15);
-                return;
-            }
-
-            if (instrumentName.includes('Snare')) {
+            } else if (type === 'drum_snare') {
                 const bufferSize = audioCtx.sampleRate * 0.1;
                 const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
                 const data = buffer.getChannelData(0);
@@ -1045,14 +1098,11 @@
                 filter.type = 'highpass';
                 filter.frequency.setValueAtTime(1200, now);
                 gainNode.gain.setValueAtTime(0.5, now);
-                gainNode.gain.exponentialRampToValueAtTime(0.001, now + 0.12);
+                gainNode.gain.exponentialRampToValueAtTime(0.001, now + 0.1);
                 noise.connect(filter);
                 filter.connect(gainNode);
                 noise.start(now);
-                return;
-            }
-
-            if (instrumentName.includes('Hi-Hat')) {
+            } else if (type === 'drum_hihat') {
                 const bufferSize = audioCtx.sampleRate * 0.04;
                 const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
                 const data = buffer.getChannelData(0);
@@ -1067,95 +1117,25 @@
                 noise.connect(filter);
                 filter.connect(gainNode);
                 noise.start(now);
-                return;
             }
+        }
 
-            // Note Frequency Conversion
-            let freq = 440;
-            const noteFreqs = {
-                'C5': 523.25, 'B4': 493.88, 'A4': 440.00, 'G4': 392.00, 'F4': 349.23, 'E4': 329.63, 'D4': 293.66, 'C4': 261.63,
-                'B3': 246.94, 'A3': 220.00, 'G3': 196.00, 'F3': 174.61, 'E3': 164.81, 'D3': 146.83, 'C3': 130.81, 'B2': 123.47, 'A2': 110.00
-            };
-            if (noteFreqs[noteName]) freq = noteFreqs[noteName];
-
+        function playSynthFallback(noteName) {
+            const now = audioCtx.currentTime;
             const osc = audioCtx.createOscillator();
-            const filter = audioCtx.createBiquadFilter();
-
-            // 2. Distinct Instrument Profiles
-            if (instrumentName.includes('Flute')) {
-                // Airy, breathy woodwind profile
-                osc.type = 'sine';
-                filter.type = 'lowpass';
-                filter.frequency.setValueAtTime(freq * 1.5, now);
-                gainNode.gain.setValueAtTime(0.001, now);
-                gainNode.gain.linearRampToValueAtTime(0.3, now + 0.08); // smooth breath attack
-                gainNode.gain.exponentialRampToValueAtTime(0.0001, now + Math.max(0.4, durationSec));
-                osc.connect(filter);
-                filter.connect(gainNode);
-            } 
-            else if (instrumentName.includes('Trumpet')) {
-                // Bright, brassy square waveform with dynamic filter bite
-                osc.type = 'sawtooth';
-                filter.type = 'bandpass';
-                filter.frequency.setValueAtTime(freq * 2, now);
-                filter.Q.setValueAtTime(3, now);
-                gainNode.gain.setValueAtTime(0.25, now);
-                gainNode.gain.exponentialRampToValueAtTime(0.0001, now + Math.max(0.3, durationSec));
-                osc.connect(filter);
-                filter.connect(gainNode);
-            } 
-            else if (instrumentName.includes('Violin')) {
-                // Warm string profile with subtle vibrato
-                osc.type = 'sawtooth';
-                filter.type = 'lowpass';
-                filter.frequency.setValueAtTime(freq * 3, now);
-                
-                // Add natural string vibrato LFO
-                const lfo = audioCtx.createOscillator();
-                lfo.frequency.setValueAtTime(5, now); // 5Hz vibrato speed
-                const lfoGain = audioCtx.createGain();
-                lfoGain.gain.setValueAtTime(4, now); // vibrato depth
-                lfo.connect(lfoGain);
-                lfoGain.connect(osc.frequency);
-                lfo.start(now);
-                lfo.stop(now + Math.max(0.4, durationSec));
-
-                gainNode.gain.setValueAtTime(0.001, now);
-                gainNode.gain.linearRampToValueAtTime(0.2, now + 0.1);
-                gainNode.gain.exponentialRampToValueAtTime(0.0001, now + Math.max(0.4, durationSec));
-                
-                osc.connect(filter);
-                filter.connect(gainNode);
-            } 
-            else if (instrumentName.includes('Bass')) {
-                // Heavy electronic synth bass
-                osc.type = 'sawtooth';
-                filter.type = 'lowpass';
-                filter.frequency.setValueAtTime(freq * 2, now);
-                filter.frequency.exponentialRampToValueAtTime(freq, now + 0.2);
-                gainNode.gain.setValueAtTime(0.4, now);
-                gainNode.gain.exponentialRampToValueAtTime(0.0001, now + Math.max(0.3, durationSec));
-                osc.connect(filter);
-                filter.connect(gainNode);
-            } 
-            else if (instrumentName.includes('Guitar')) {
-                // Plucked acoustic string envelope
-                osc.type = 'triangle';
-                gainNode.gain.setValueAtTime(0.35, now);
-                gainNode.gain.exponentialRampToValueAtTime(0.0001, now + Math.max(0.25, durationSec));
-                osc.connect(gainNode);
-            } 
-            else {
-                // Piano / Keys default warm harmonic profile
-                osc.type = 'triangle';
-                gainNode.gain.setValueAtTime(0.3, now);
-                gainNode.gain.exponentialRampToValueAtTime(0.0001, now + Math.max(0.3, durationSec));
-                osc.connect(gainNode);
-            }
-
+            const gain = audioCtx.createGain();
+            let freq = 440;
+            if (noteName === 'C5') freq = 523.25;
+            else if (noteName === 'C4') freq = 261.63;
+            else if (noteName === 'A4') freq = 440.00;
+            
             osc.frequency.setValueAtTime(freq, now);
+            gain.gain.setValueAtTime(0.3, now);
+            gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.5);
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
             osc.start(now);
-            osc.stop(now + Math.max(0.4, durationSec));
+            osc.stop(now + 0.5);
         }
 
         function togglePlayback() {
@@ -1178,7 +1158,7 @@
 
                 activeProj.clips.forEach(clip => {
                     if (!playedClips.has(clip.id) && playbackTimeSec >= clip.start && playbackTimeSec <= (clip.start + 0.1)) {
-                        playTone(clip.instrument, clip.note, clip.duration);
+                        playTone(clip.soundfontKey, clip.note, clip.instrument);
                         playedClips.add(clip.id);
                     }
                 });
@@ -1212,7 +1192,7 @@
             const name = prompt("Enter project name:", `Project ${projects.length + 1}`);
             if (!name) return;
             const newProj = { id: Date.now(), name: name, clips: [], bpm: 120, zoom: 1 };
-            projects.push(newProj);
+                projects.push(newProj);
             saveAndRefresh();
             switchProject(newProj.id);
         }
