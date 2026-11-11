@@ -639,7 +639,7 @@
         }
 
         function initSamplers() {
-            showNotification("🌐 Loading real multi-sample orchestral banks...");
+            showNotification("🌐 Loading multi-sample sound banks...");
             
             const sampleMap = {
                 'flute': { 'C4': 'C4.mp3', 'C5': 'C5.mp3', 'A4': 'A4.mp3' },
@@ -655,7 +655,7 @@
                     urls: mapping,
                     baseUrl: `${CDN_BASE}${key}/`,
                     onload: () => {
-                        if (key === 'flute') showNotification("✨ Real Flute & Orchestral engine ready!");
+                        if (key === 'flute') showNotification("✨ All instrument sample banks ready!");
                     }
                 }).toDestination();
             }
@@ -1016,7 +1016,7 @@
             }
         }
 
-        // --- Tone.js Engine Integration ---
+        // --- Tone.js Engine with Exact Note Holding (Sustain) ---
         async function playTone(key, noteName, durationSec = 1.5) {
             await Tone.start();
 
@@ -1026,6 +1026,7 @@
             }
 
             if (samplers[key] && samplers[key].loaded) {
+                // Pass exact clip duration so the note sustains as long as the block on the timeline
                 samplers[key].triggerAttackRelease(noteName, durationSec);
             } else {
                 showNotification(`⏳ Sample still loading for ${key}...`);
@@ -1065,6 +1066,7 @@
 
                 activeProj.clips.forEach(clip => {
                     if (!playedClips.has(clip.id) && playbackTimeSec >= clip.start && playbackTimeSec <= (clip.start + 0.1)) {
+                        // Triggers the note and holds it for the full duration of the clip block
                         playTone(clip.key, clip.note, clip.duration);
                         playedClips.add(clip.id);
                     }
